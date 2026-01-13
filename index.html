@@ -51,11 +51,17 @@
     function hideSync() { syncBtn.style.display = "none"; }
     function showSync() { syncBtn.style.display = ""; }
 
-    function hideFooter() {
+    // Footer-only hide: does NOT restore Sync (auto-hide uses this)
+    function hideFooterOnly() {
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
       outCard.innerText = "";
       outShift.innerText = "";
       calcResult.style.display = "none";
+    }
+
+    // Full restore: ONLY called from the arrow
+    function restoreAll() {
+      hideFooterOnly();
       showSync();
     }
 
@@ -66,7 +72,9 @@
       document.activeElement.blur();
 
       if (hideTimer) clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => hideFooter(), 10000);
+      hideTimer = setTimeout(() => {
+        hideFooterOnly(); // IMPORTANT: Sync stays hidden
+      }, 10000);
     }
 
     function parseFirstInt(s) {
@@ -113,7 +121,6 @@
       return rank + suit;
     }
 
-    // Convert a stack position x (1..52) to new position after a cut defined by bottom card B.
     // If bottom card is at position p in the memorised stack, then newPos(x) = ((x - p - 1) mod 52) + 1
     function positionAfterCut(originalPos, bottomPos) {
       const z = (originalPos - bottomPos - 1) % 52;
@@ -122,7 +129,7 @@
 
     function revealMathCore() {
       const rawLines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
-      if (rawLines.length < 2) { hideFooter(); return; }
+      if (rawLines.length < 2) { hideFooterOnly(); return; }
 
       const namedCard = normaliseCard(rawLines[0]);
       const pos = clamp1to52(parseFirstInt(rawLines[1]));
@@ -133,26 +140,26 @@
         noteContent.value = rawLines.slice(0, 2).join("\n") + "\n";
       }
 
-      if (!namedCard || isNaN(pos)) { hideFooter(); return; }
+      if (!namedCard || isNaN(pos)) { hideFooterOnly(); return; }
 
       // Determine current position of namedCard (with optional cut)
       let currentPos;
       if (bottomCard) {
         const bottomPos = stack.indexOf(bottomCard) + 1;
-        if (bottomPos <= 0) { hideFooter(); return; }
+        if (bottomPos <= 0) { hideFooterOnly(); return; }
 
         const origPos = stack.indexOf(namedCard) + 1;
-        if (origPos <= 0) { hideFooter(); return; }
+        if (origPos <= 0) { hideFooterOnly(); return; }
 
         currentPos = positionAfterCut(origPos, bottomPos);
       } else {
         currentPos = stack.indexOf(namedCard) + 1;
-        if (currentPos <= 0) { hideFooter(); return; }
+        if (currentPos <= 0) { hideFooterOnly(); return; }
       }
 
       const diff = currentPos - pos;
 
-      // Match case
+      // Match case (low-signal)
       if (diff === 0) { showFooter("00", 0); return; }
 
       let shift = diff % 52;
@@ -167,13 +174,13 @@
 
     syncBtn.addEventListener("click", revealMath);
 
-    // Arrow: hard reset, and brings Sync back (via hideFooter)
+    // Arrow: only way to restore Sync
     resetBtn.addEventListener("click", () => {
       noteContent.value = "";
-      hideFooter();
+      restoreAll();
     });
 
-    // Service worker (optional, keep if you're doing PWA install)
+    // Service worker (optional)
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/Notes/sw.js").catch(() => {});
     }
