@@ -22,6 +22,7 @@ self.addEventListener("fetch", (e) => {
       if (cached) return cached;
 
       return fetch(req).then((res) => {
+        // Cache same-origin GETs opportunistically
         try {
           const url = new URL(req.url);
           if (req.method === "GET" && url.origin === self.location.origin) {
