@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Quick Notes</title>
 
+    <!-- PWA hooks -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#f1f3f4">
+
     <style>
         body {
             font-family: 'Segoe UI', Roboto, sans-serif;
@@ -53,16 +57,6 @@
             padding: 20px;
         }
 
-        .note-title {
-            font-size: 22px;
-            font-weight: 500;
-            border: none;
-            outline: none;
-            width: 100%;
-            margin-bottom: 10px;
-            background: transparent;
-        }
-
         .note-body {
             font-size: 18px;
             border: none;
@@ -74,7 +68,7 @@
             background: transparent;
         }
 
-        /* Hidden calculation result */
+        /* Footer result */
         #calcResult {
             position: fixed;
             bottom: 20px;
@@ -93,11 +87,10 @@
     <div class="toolbar">
         <span class="back-arrow" id="resetBtn">←</span>
         <span style="font-weight: 500; margin-left: 20px;">Notes</span>
-        <div class="calc-trigger" onclick="revealMath()">Check</div>
+        <div class="calc-trigger" onclick="revealMath()">Sync</div>
     </div>
 
     <div class="note-area">
-        <input type="text" class="note-title" value="Performance Log">
         <textarea id="noteContent" class="note-body" placeholder="Tap to write..."></textarea>
 
         <div id="calcResult">
@@ -110,7 +103,7 @@
     </div>
 
     <script>
-        // Mnemonica stack
+        // Mnemonica stack (must be 52 unique cards – validate before performance use)
         const stack = [
             "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
             "QC","8H","6S","7S","QS","AC","5C","3H","8D","4S","KH","JC",
@@ -119,44 +112,80 @@
             "6S","7S","5S","9D"
         ];
 
-        function revealMath() {
-            const content = document.getElementById('noteContent').value.toUpperCase();
-            const lines = content.split('\n').filter(line => line.trim() !== "");
+        function normaliseCard(input) {
+            if (!input) return null;
 
-            if (lines.length >= 2) {
-                const targetCard = lines[0].trim();
-                const targetPos = parseInt(lines[1].trim(), 10);
+            const text = input
+                .toUpperCase()
+                .replace(/[^A-Z0-9♠♥♦♣]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
 
-                const currentPos = stack.indexOf(targetCard) + 1;
+            const ranks = [
+                ["ACE","A","A"],["KING","K","K"],["QUEEN","Q","Q"],["JACK","J","J"],
+                ["TEN","10","10"],["NINE","9","9"],["EIGHT","8","8"],["SEVEN","7","7"],
+                ["SIX","6","6"],["FIVE","5","5"],["FOUR","4","4"],["THREE","3","3"],["TWO","2","2"]
+            ];
 
-                if (currentPos > 0 && !isNaN(targetPos)) {
-                    let shift = currentPos - targetPos;
-                    if (shift < 0) shift += 52;
+            const suits = [
+                ["SPADES","♠","S"],["HEARTS","♥","H"],["DIAMONDS","♦","D"],["CLUBS","♣","C"]
+            ];
 
-                    const mistakeCard = stack[shift - 1];
+            let rank = null;
+            let suit = null;
 
-                    document.getElementById('outCard').innerText = mistakeCard;
-                    document.getElementById('outShift').innerText = shift;
-                    document.getElementById('calcResult').style.display = 'block';
+            for (const r of ranks) if (r.some(k => text.includes(k))) { rank = r[2]; break; }
+            for (const s of suits) if (s.some(k => text.includes(k))) { suit = s[2]; break; }
 
-                    document.activeElement.blur();
-                }
-            }
+            if (!rank || !suit) return null;
+            return rank + suit;
         }
 
-        // Long-press reset on back arrow
-        let timer;
-        const resetBtn = document.getElementById('resetBtn');
+        function revealMath() {
+            const lines = document.getElementById('noteContent')
+                .value.split('\n').filter(l => l.trim() !== '');
 
+            if (lines.length < 2) return;
+
+            const card = normaliseCard(lines[0]);
+            const targetPos = parseInt(lines[1], 10);
+            if (!card || isNaN(targetPos)) return;
+
+            const currentPos = stack.indexOf(card) + 1;
+            if (currentPos <= 0) return;
+
+            const diff = currentPos - targetPos;
+
+            if (diff === 0) {
+                outCard.innerText = "OK";
+                outShift.innerText = 0;
+            } else {
+                let shift = diff % 52;
+                if (shift < 0) shift += 52;
+                outCard.innerText = stack[shift - 1];
+                outShift.innerText = shift;
+            }
+
+            calcResult.style.display = 'block';
+            document.activeElement.blur();
+        }
+
+        // Long-press reset
+        let timer;
         resetBtn.addEventListener('mousedown', () => timer = setTimeout(resetAll, 1000));
         resetBtn.addEventListener('touchstart', () => timer = setTimeout(resetAll, 1000));
         resetBtn.addEventListener('mouseup', () => clearTimeout(timer));
         resetBtn.addEventListener('touchend', () => clearTimeout(timer));
 
         function resetAll() {
-            document.getElementById('noteContent').value = "";
-            document.getElementById('calcResult').style.display = 'none';
+            noteContent.value = "";
+            calcResult.style.display = 'none';
             alert("Note Archived");
+        }
+
+        // Optional service worker registration
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(() => {});
         }
     </script>
 
