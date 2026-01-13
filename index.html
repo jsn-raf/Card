@@ -14,9 +14,8 @@
     body { font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; background-color: #fff; color: #202124; overflow: hidden; }
     .toolbar { background-color: #f1f3f4; padding: 15px; display: flex; align-items: center; border-bottom: 1px solid #ddd; height: 50px; position: relative; }
     .back-arrow { font-size: 20px; color: #5f6368; cursor: pointer; user-select: none; }
-    .calc-trigger { position: absolute; top: 10px; right: 10px; padding: 8px 12px; font-size: 12px; color: #5f6368; background-color: #e8eaed; border-radius: 6px; cursor: pointer; user-select: none; transition: opacity 120ms ease; }
+    .calc-trigger { position: absolute; top: 10px; right: 10px; padding: 8px 12px; font-size: 12px; color: #5f6368; background-color: #e8eaed; border-radius: 6px; cursor: pointer; user-select: none; }
     .calc-trigger:hover { background-color: #dadce0; }
-    .calc-trigger.disabled { opacity: 0.45; pointer-events: none; }
     .note-area { padding: 20px; }
     .note-body { font-size: 18px; border: none; outline: none; width: 100%; height: 300px; resize: none; line-height: 1.6; background: transparent; }
     #calcResult { position: fixed; bottom: 20px; left: 20px; right: 20px; color: #bdc1c6; font-size: 0.75em; display: none; font-family: monospace; }
@@ -39,23 +38,21 @@
   </div>
 
   <script>
-    // Must be 52 UNIQUE valid cards for reliability.
+    /* ---------------------------
+       STACK (Mnemonica)
+       --------------------------- */
+
     const stack = [
-  "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
-  "QC","8H","6S","5S","9H","KC","2D","JH","3S","8S","6H","10C",
-  "5D","KD","2C","3H","8D","5C","KS","JD","8C","10S","KH","JC",
-  "7S","10H","AD","4S","7H","4D","AC","9C","JS","QD","7C","QS",
-  "10D","6C","AH","9D"
+      "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
+      "QC","8H","6S","5S","9H","KC","2D","JH","3S","8S","6H","10C",
+      "5D","KD","2C","3H","8D","5C","KS","JD","8C","10S","KH","JC",
+      "7S","10H","AD","4S","7H","4D","AC","9C","JS","QD","7C","QS",
+      "10D","6C","AH","9D"
     ];
 
-    let STACK_OK = false;
-
-    function validateStack(arr) {
-      if (!Array.isArray(arr) || arr.length !== 52) return false;
-      const rx = /^(10|[2-9AJQK])[CDHS]$/;
-      for (const c of arr) if (!rx.test(c)) return false;
-      return new Set(arr).size === 52;
-    }
+    /* ---------------------------
+       UI HELPERS
+       --------------------------- */
 
     function hideFooter() {
       outCard.innerText = "";
@@ -83,24 +80,25 @@
       return n;
     }
 
-    function setSyncEnabled(enabled) {
-      if (enabled) syncBtn.classList.remove("disabled");
-      else syncBtn.classList.add("disabled");
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-      STACK_OK = validateStack(stack);
-      setSyncEnabled(STACK_OK);
-      if (!STACK_OK) hideFooter();
-    });
+    /* ---------------------------
+       STRICT CARD NORMALISER
+       Accepts:
+       - AS / 10D / QC (optionally spaced)
+       - A♠ / 10♦ etc
+       - "ACE OF SPADES" / "ACE SPADES" / "SPADES ACE"
+       Rejects junk like "ASDASDA" or "FOX"
+       --------------------------- */
 
     function normaliseCard(input) {
       if (!input) return null;
+
       const raw = input.toUpperCase().trim();
 
+      // 1) Compact shorthand
       const compact = raw.replace(/\s+/g, "");
       if (/^(10|[2-9AJQK])[CDHS]$/.test(compact)) return compact;
 
+      // 2) Symbol forms
       const sym = compact
         .replaceAll("♠", "S")
         .replaceAll("♥", "H")
@@ -108,7 +106,12 @@
         .replaceAll("♣", "C");
       if (/^(10|[2-9AJQK])[CDHS]$/.test(sym)) return sym;
 
-      const text = raw.replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+      // 3) Word forms (token based)
+      const text = raw
+        .replace(/[^A-Z0-9 ]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
       const tokens = text.split(" ").filter(t => t && t !== "OF" && t !== "THE");
 
       const rankMap = {
@@ -117,8 +120,10 @@
         "SIX": "6", "FIVE": "5", "FOUR": "4", "THREE": "3", "TWO": "2",
         "A": "A", "K": "K", "Q": "Q", "J": "J"
       };
-      const suitMap = { "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C",
-                        "S": "S", "H": "H", "D": "D", "C": "C" };
+      const suitMap = {
+        "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C",
+        "S": "S", "H": "H", "D": "D", "C": "C"
+      };
 
       let rank = null;
       let suit = null;
@@ -132,9 +137,11 @@
       return rank + suit;
     }
 
-    function revealMathCore() {
-      if (!STACK_OK) { hideFooter(); return; }
+    /* ---------------------------
+       CORE LOGIC
+       --------------------------- */
 
+    function revealMathCore() {
       const lines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
       if (lines.length < 2) { hideFooter(); return; }
 
@@ -148,10 +155,11 @@
 
       const diff = currentPos - pos;
 
+      // Match case: low-signal token
       if (diff === 0) { showFooter("00", 0); return; }
 
       let shift = diff % 52;
-      if (shift < 0) shift += 52;
+      if (shift < 0) shift += 52; // 1..51 (since diff !== 0)
       showFooter(stack[shift - 1], shift);
     }
 
@@ -159,12 +167,21 @@
       window.setTimeout(revealMathCore, 220);
     }
 
+    /* ---------------------------
+       BUTTONS
+       --------------------------- */
+
     syncBtn.addEventListener("click", revealMath);
 
+    // Single tap reset (no popup)
     resetBtn.addEventListener("click", () => {
       noteContent.value = "";
       hideFooter();
     });
+
+    /* ---------------------------
+       SERVICE WORKER
+       --------------------------- */
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/Notes/sw.js").catch(() => {});
