@@ -44,21 +44,18 @@
       -webkit-touch-callout: none;
     }
 
+    /* ✓ completion control – looks native, not like a button */
     .calc-trigger {
       position: absolute;
-      right: 10px;
+      right: 14px;
       top: 50%;
       transform: translateY(-50%);
-      padding: 8px 12px;
-      font-size: 12px;
+      font-size: 18px;
       color: #5f6368;
-      background: #e8eaed;
-      border-radius: 6px;
       cursor: pointer;
       user-select: none;
+      line-height: 1;
     }
-
-    .calc-trigger:hover { background: #dadce0; }
 
     .note-area { padding: 20px; }
 
@@ -95,7 +92,7 @@
   <div class="toolbar">
     <span class="back-arrow" id="resetBtn">←</span>
     <span class="title" id="titleBtn">Quick Notes</span>
-    <div class="calc-trigger" id="syncBtn">Save</div>
+    <div class="calc-trigger" id="syncBtn" aria-label="Done">✓</div>
   </div>
 
   <div class="note-area">
@@ -180,10 +177,7 @@
         "SIX":"6","FIVE":"5","FOUR":"4","THREE":"3","TWO":"2",
         "A":"A","K":"K","Q":"Q","J":"J"
       };
-      const suitMap = {
-        "SPADES":"S","HEARTS":"H","DIAMONDS":"D","CLUBS":"C",
-        "S":"S","H":"H","D":"D","C":"C"
-      };
+      const suitMap = { "SPADES":"S","HEARTS":"H","DIAMONDS":"D","CLUBS":"C","S":"S","H":"H","D":"D","C":"C" };
 
       let rank = null, suit = null;
       for (const t of tokens) {
@@ -225,7 +219,6 @@
       }
 
       const diff = currentPos - pos;
-
       hideSave();
 
       if (diff === 0) { showFooter("00", 0); return; }
@@ -253,7 +246,6 @@
     function tryRevealLast() {
       if (!isSaveHidden()) return;
       if (lastOutCard == null || lastOutShift == null) return;
-
       outCard.innerText = lastOutCard;
       outShift.innerText = lastOutShift;
       calcResult.style.display = "block";
@@ -267,7 +259,7 @@
 
     function holdEnd() {
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-      hideFooterOnly();   // hide immediately on release
+      hideFooterOnly();
     }
 
     titleBtn.addEventListener("mousedown", holdStart);
@@ -281,5 +273,6 @@
       navigator.serviceWorker.register("/Notes/sw.js");
     }
   </script>
+
 </body>
 </html>
