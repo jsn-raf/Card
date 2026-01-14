@@ -45,7 +45,7 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* Top-right control: three vertical dots */
+    /* Fixed-size control area */
     .calc-trigger {
       position: absolute;
       right: 6px;
@@ -54,13 +54,20 @@
       width: 44px;
       height: 44px;
       display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Dots layout */
+    .dots {
+      display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       gap: 3px;
-      cursor: pointer;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
     }
 
     .vdot {
@@ -68,35 +75,33 @@
       height: 4px;
       border-radius: 50%;
       background: #5f6368;
-      opacity: 0.85;
-      transform: scale(1);
+      opacity: 0.65;
     }
 
-    /* SUCCESS INDICATOR: TOP DOT BOLD */
+    /* SUCCESS INDICATOR: TOP DOT, SUBTLE (NO SCALE) */
     .calc-trigger.armed .vdot.top {
-      opacity: 1;
-      transform: scale(1.45);
       background: #202124;
+      opacity: 1;
     }
 
-    /* Peek text (replaces dots while held) */
-    .peekcol {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 13px;
-      font-weight: 750;
-      color: #202124;
-      letter-spacing: 0.02em;
-      line-height: 1;
+    /* Peek layout – same container, same footprint */
+    .peek {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      color: #202124;
       gap: 2px;
     }
-    .peekcol .sep {
+
+    .peek .sep {
       opacity: 0.7;
       font-weight: 900;
-      transform: translateY(-1px);
     }
 
     .note-area { padding: 20px; }
@@ -123,9 +128,11 @@
     <span class="title" id="titleBtn">Quick Notes</span>
 
     <div class="calc-trigger" id="syncBtn" aria-label="More options">
-      <span class="vdot top"></span>
-      <span class="vdot"></span>
-      <span class="vdot"></span>
+      <div class="dots">
+        <span class="vdot top"></span>
+        <span class="vdot"></span>
+        <span class="vdot"></span>
+      </div>
     </div>
   </div>
 
@@ -145,29 +152,26 @@
     let lastOutCard = null;
     let lastOutShift = null;
 
-    const DOTS_HTML = `
-      <span class="vdot top"></span>
-      <span class="vdot"></span>
-      <span class="vdot"></span>
-    `;
-
     function setArmed() { syncBtn.classList.add("armed"); }
     function clearArmed() { syncBtn.classList.remove("armed"); }
 
     function showDots() {
-      syncBtn.innerHTML = DOTS_HTML;
+      syncBtn.innerHTML = `
+        <div class="dots">
+          <span class="vdot top"></span>
+          <span class="vdot"></span>
+          <span class="vdot"></span>
+        </div>`;
     }
 
-    // UPDATED: stacked vertically: card, dot, shift
-    function showPeekText() {
+    function showPeek() {
       if (!lastOutCard || lastOutShift == null) return;
       syncBtn.innerHTML = `
-        <span class="peekcol">
-          <span>${lastOutCard}</span>
-          <span class="sep">·</span>
-          <span>${lastOutShift}</span>
-        </span>
-      `;
+        <div class="peek">
+          <div>${lastOutCard}</div>
+          <div class="sep">·</div>
+          <div>${lastOutShift}</div>
+        </div>`;
     }
 
     function parseFirstInt(s) {
@@ -176,94 +180,52 @@
     }
 
     function require1to52(n) {
-      if (!Number.isFinite(n)) return NaN;
-      if (n < 1 || n > 52) return NaN;
-      return n;
+      return Number.isFinite(n) && n >= 1 && n <= 52 ? n : NaN;
     }
 
     function normaliseCard(input) {
       if (!input) return null;
-      const raw = input.toUpperCase().trim();
-
-      const compact = raw.replace(/\s+/g, "");
-      if (/^(10|[2-9AJQK])[CDHS]$/.test(compact)) return compact;
-
-      const sym = compact
-        .replaceAll("♠","S").replaceAll("♥","H")
-        .replaceAll("♦","D").replaceAll("♣","C");
-      if (/^(10|[2-9AJQK])[CDHS]$/.test(sym)) return sym;
-
-      const text = raw.replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-      const tokens = text.split(" ").filter(t => t && t !== "OF" && t !== "THE");
-
-      const rankMap = {
-        "ACE":"A","KING":"K","QUEEN":"Q","JACK":"J",
-        "TEN":"10","NINE":"9","EIGHT":"8","SEVEN":"7",
-        "SIX":"6","FIVE":"5","FOUR":"4","THREE":"3","TWO":"2",
-        "A":"A","K":"K","Q":"Q","J":"J"
-      };
-      const suitMap = {
-        "SPADES":"S","HEARTS":"H","DIAMONDS":"D","CLUBS":"C",
-        "S":"S","H":"H","D":"D","C":"C"
-      };
-
-      let r=null, s=null;
-      for (const t of tokens) {
-        if (!r && (rankMap[t] || /^(10|[2-9])$/.test(t))) r = rankMap[t] || t;
-        if (!s && suitMap[t]) s = suitMap[t];
-      }
-      return (r && s) ? r + s : null;
+      const raw = input.toUpperCase().trim().replace(/\s+/g, "");
+      if (/^(10|[2-9AJQK])[CDHS]$/.test(raw)) return raw;
+      return null;
     }
 
-    function positionAfterCut(originalPos, bottomPos) {
-      const z = (originalPos - bottomPos - 1) % 52;
+    function positionAfterCut(op, bp) {
+      const z = (op - bp - 1) % 52;
       return (z < 0 ? z + 52 : z) + 1;
     }
 
-    function computeSilently() {
+    function compute() {
       const lines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
       if (lines.length < 2) return;
 
-      const namedCard = normaliseCard(lines[0]);
-      const targetPos = require1to52(parseFirstInt(lines[1]));
-      if (!namedCard || isNaN(targetPos)) return;
+      const card = normaliseCard(lines[0]);
+      const pos = require1to52(parseFirstInt(lines[1]));
+      if (!card || isNaN(pos)) return;
 
-      let bottomCard = null;
-      if (lines.length >= 3) {
-        bottomCard = normaliseCard(lines[2]);
-        if (!bottomCard) return;
-      }
-
-      let currentPos;
-      if (bottomCard) {
-        const bp = stack.indexOf(bottomCard) + 1;
-        const op = stack.indexOf(namedCard) + 1;
-        if (bp <= 0 || op <= 0) return;
-        currentPos = positionAfterCut(op, bp);
-
-        // Only delete line 3 if it was valid and used
-        noteContent.value = lines.slice(0, 2).join("\n") + "\n";
+      let cur;
+      if (lines[2]) {
+        const bottom = normaliseCard(lines[2]);
+        if (!bottom) return;
+        cur = positionAfterCut(stack.indexOf(card)+1, stack.indexOf(bottom)+1);
+        noteContent.value = lines.slice(0,2).join("\n") + "\n";
       } else {
-        currentPos = stack.indexOf(namedCard) + 1;
-        if (currentPos <= 0) return;
+        cur = stack.indexOf(card)+1;
       }
 
-      const diff = currentPos - targetPos;
-
+      const diff = cur - pos;
       if (diff === 0) {
         lastOutCard = "00";
         lastOutShift = "0";
       } else {
-        let shift = diff % 52;
-        if (shift < 0) shift += 52;
-        lastOutCard = stack[shift - 1];
-        lastOutShift = String(shift);
+        let s = diff % 52; if (s < 0) s += 52;
+        lastOutCard = stack[s-1];
+        lastOutShift = String(s);
       }
-
       setArmed();
     }
 
-    syncBtn.addEventListener("click", () => setTimeout(computeSilently, 180));
+    syncBtn.addEventListener("click", () => setTimeout(compute, 180));
 
     resetBtn.addEventListener("click", () => {
       noteContent.value = "";
@@ -278,16 +240,13 @@
 
     function holdStart(e) {
       if (e && e.preventDefault) e.preventDefault();
-      if (holdTimer) clearTimeout(holdTimer);
-      holdTimer = setTimeout(() => {
-        if (lastOutCard && lastOutShift != null) showPeekText();
-      }, HOLD_MS);
+      holdTimer = setTimeout(showPeek, HOLD_MS);
     }
 
     function holdEnd() {
-      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      clearTimeout(holdTimer);
       showDots();
-      clearArmed();   // clears the bold dot after peeking
+      clearArmed();
     }
 
     titleBtn.addEventListener("mousedown", holdStart);
@@ -296,10 +255,6 @@
     titleBtn.addEventListener("mouseleave", holdEnd);
     titleBtn.addEventListener("touchend", holdEnd);
     titleBtn.addEventListener("touchcancel", holdEnd);
-
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/Notes/sw.js").catch(() => {});
-    }
   </script>
 </body>
 </html>
