@@ -17,7 +17,6 @@
       color:#202124;
       overflow:hidden;
     }
-
     .toolbar{
       background:#f5f6f7;
       padding:15px;
@@ -29,7 +28,6 @@
       -webkit-tap-highlight-color:transparent;
       touch-action:manipulation;
     }
-
     .back-arrow{
       font-size:20px;
       color:#5f6368;
@@ -42,7 +40,6 @@
       -webkit-user-select:none;
       -webkit-touch-callout:none;
     }
-
     .title{
       font-weight:500;
       margin-left:20px;
@@ -51,7 +48,6 @@
       -webkit-user-select:none;
       -webkit-touch-callout:none;
     }
-
     .calc-trigger{
       position:absolute;
       right:6px;
@@ -67,7 +63,6 @@
       -webkit-user-select:none;
       -webkit-touch-callout:none;
     }
-
     .dots{
       display:flex;
       flex-direction:column;
@@ -77,7 +72,6 @@
       -webkit-user-select:none;
       -webkit-touch-callout:none;
     }
-
     .vdot{
       width:4px;
       height:4px;
@@ -85,7 +79,6 @@
       background:#5f6368;
       opacity:0.65;
     }
-
     .calc-trigger.armed-top .vdot.top{ background:#202124; opacity:1; }
     .calc-trigger.armed-mid .vdot.mid{ background:#202124; opacity:1; }
     .calc-trigger.armed-bottom .vdot.bottom{ background:#202124; opacity:1; }
@@ -164,9 +157,8 @@
     const peekCard    = document.getElementById("peekCard");
     const peekShift   = document.getElementById("peekShift");
 
-    toolbarBtn.addEventListener("contextmenu", (e) => e.preventDefault());
+    toolbarBtn.addEventListener("contextmenu", e => e.preventDefault());
 
-    // Mnemonica base order (1–52)
     const stack = [
       "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
       "QC","8H","6S","5S","9H","KC","2D","JH","3S","8S","6H","10C",
@@ -210,7 +202,6 @@
       peekShift.textContent = "";
     }
 
-    // Parsing
     const suitMap = {
       SPADES:"S",SPADE:"S",S:"S","♠":"S",
       HEARTS:"H",HEART:"H",H:"H","♥":"H",
@@ -227,7 +218,6 @@
     function findCardInText(text){
       if (!text) return null;
       const raw = String(text);
-
       const compactRe = /(10|[2-9AJQK])\s*([CDHS♠♥♦♣])/ig;
       let m;
       while ((m = compactRe.exec(raw)) !== null) {
@@ -236,21 +226,15 @@
         const code = r + s;
         if (/^(10|[2-9AJQK])[CDHS]$/.test(code)) return { code, start: m.index, end: m.index + m[0].length };
       }
-
       const tokenRe = /[A-Za-z0-9♠♥♦♣]+/g;
-      let t;
-      let suitTok = null, rankTok = null;
-
+      let t, suitTok=null, rankTok=null;
       while ((t = tokenRe.exec(raw)) !== null) {
-        const u = t[0].toUpperCase();
-        const s = t.index;
-        const e = s + t[0].length;
-        if (!suitTok && suitMap[u]) suitTok = { u, s, e };
-        if (!rankTok && rankMap[u]) rankTok = { u, s, e };
+        const u = t[0].toUpperCase(), s=t.index, e=s+t[0].length;
+        if (!suitTok && suitMap[u]) suitTok={u,s,e};
+        if (!rankTok && rankMap[u]) rankTok={u,s,e};
         if (suitTok && rankTok) break;
       }
       if (!suitTok || !rankTok) return null;
-
       return { code: rankMap[rankTok.u] + suitMap[suitTok.u], start: Math.min(suitTok.s, rankTok.s), end: Math.max(suitTok.e, rankTok.e) };
     }
 
@@ -262,7 +246,7 @@
     function normaliseNumberTextKeepLength(s){
       return String(s ?? "")
         .replace(/\u00A0/g, " ")
-        .replace(/[\u2010\u2011\u2012\u2013\u2014]/g, "-");
+        .replace(/[\u2010-\u2014]/g, "-");
     }
 
     const ones = {
@@ -275,25 +259,19 @@
     function findPositionInLine(line){
       const s = normaliseNumberTextKeepLength(String(line ?? ""));
       if (!s.trim()) return null;
-
       const d = /\d+/.exec(s);
       if (d) {
         const v = parseInt(d[0], 10);
         if (v >= 1 && v <= 52) return { value: v, start: d.index, end: d.index + d[0].length };
       }
-
       const re = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)(?:[-\s]+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))?\b/ig;
-
-      let best = null, m;
+      let best=null,m;
       while ((m = re.exec(s)) !== null) {
-        const a = String(m[1]).toUpperCase();
-        const b = m[2] ? String(m[2]).toUpperCase() : null;
-
+        const a = String(m[1]).toUpperCase(), b = m[2] ? String(m[2]).toUpperCase() : null;
         let v = NaN;
         if (ones[a] != null) v = ones[a];
         else if (tens[a] != null && b && ones[b] != null) v = tens[a] + ones[b];
         else if (tens[a] != null && !b) v = tens[a];
-
         if (Number.isFinite(v) && v >= 1 && v <= 52) {
           const cand = { value: v, start: m.index, end: m.index + m[0].length };
           if (!best || (cand.end - cand.start) > (best.end - best.start)) best = cand;
@@ -308,17 +286,10 @@
       return (before + after).replace(/\s{2,}/g, " ").replace(/[ \t]+$/g, "");
     }
 
-    // Build the current deck order given the bottom card.
-    // Semantics: line 3 (or inline card on line 2) = BOTTOM CARD of the deck right now.
-    // This is just a rotation of the same cycle (Mnemonica preserved).
     function buildDeckNow(bottomCard){
       if (!bottomCard) return stack.slice();
-
       const bi = stack.indexOf(bottomCard);
       if (bi < 0) return null;
-
-      // bottomCard must be last in deckNow
-      // deckNow = card after bottom ... up to bottom
       return stack.slice(bi + 1).concat(stack.slice(0, bi + 1));
     }
 
@@ -338,7 +309,6 @@
       const posInfo = findPositionInLine(line2);
       if (!posInfo) return;
 
-      // Determine bottom card (optional)
       let bottomCard = null;
       let mode = "top";
       let inlineSpan = null;
@@ -365,10 +335,7 @@
       if (namedIdxNow < 0) return;
 
       const currentPos = namedIdxNow + 1;
-
-      // OPTION B (inclusive dealing): you deal the Nth card, so compare to N+1
-      const effectiveTarget = posInfo.value + 1;
-      const diff = currentPos - effectiveTarget;
+      const diff = currentPos - posInfo.value;
 
       if (diff === 0) {
         lastOutCard = "00";
@@ -376,12 +343,10 @@
       } else {
         let shift = diff % 52;
         if (shift < 0) shift += 52;
-        // IMPORTANT: output card must also be in deckNow coordinates (since you're dealing through deckNow)
         lastOutCard = deckNow[shift - 1];
         lastOutShift = String(shift);
       }
 
-      // Clean up the bottom-card entry only (preserve how they typed number etc.)
       if (mode === "bottom") {
         noteContent.value = line1 + "\n" + line2;
       } else if (mode === "mid" && inlineSpan) {
@@ -393,7 +358,6 @@
       isDirty = false;
     }
 
-    // Gestures: tap toolbar runs, hold shows peek, arrow resets
     const HOLD_MS = 650;
     const MOVE_TOL = 10;
 
@@ -409,7 +373,6 @@
     function onDown(e){
       startedOnReset = !!(e.target && e.target.closest && e.target.closest("#resetBtn"));
       if (startedOnReset) return;
-
       if (document.activeElement === noteContent) noteContent.blur();
 
       peekShownThisGesture = false;
@@ -435,15 +398,12 @@
 
     function onUpOrCancel(){
       if (startedOnReset) { startedOnReset = false; return; }
-
       clearHold();
-
       if (peekShownThisGesture) {
         hidePeek();
         clearArmed();
         return;
       }
-
       hidePeek();
       setTimeout(compute, 50);
     }
@@ -452,15 +412,12 @@
       clearHold();
       startedOnReset = false;
       peekShownThisGesture = false;
-
       noteContent.blur();
       noteContent.value = "";
-
       lastOutCard = null;
       lastOutShift = null;
       clearArmed();
       hidePeek();
-
       lastComputedSnapshot = null;
       isDirty = true;
     });
