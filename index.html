@@ -149,9 +149,17 @@
       "10D","6C","AH","9D"
     ];
 
-    // State
+    // --- State ---
     let lastOutCard = null;
     let lastOutShift = null;
+
+    // Prevent re-running compute on the same settled note
+    let lastComputedSnapshot = null;
+    let isDirty = true;
+
+    noteContent.addEventListener("input", () => {
+      isDirty = true;
+    });
 
     function clearArmed() {
       syncBtn.classList.remove("armed-top","armed-mid","armed-bottom");
@@ -178,7 +186,7 @@
       peekShift.textContent = "";
     }
 
-    // Parsing: cards
+    // --- Parsing: cards ---
     const suitMap = {
       SPADES:"S",SPADE:"S",S:"S","♠":"S",
       HEARTS:"H",HEART:"H",H:"H","♥":"H",
@@ -241,7 +249,7 @@
       return found ? found.code : null;
     }
 
-    // Parsing: position numbers (1–52) with span
+    // --- Parsing: position numbers (1–52) with span ---
     const ones = {
       ONE:1,TWO:2,THREE:3,FOUR:4,FIVE:5,SIX:6,SEVEN:7,EIGHT:8,NINE:9,
       TEN:10,ELEVEN:11,TWELVE:12,THIRTEEN:13,FOURTEEN:14,FIFTEEN:15,
@@ -303,6 +311,9 @@
     }
 
     function compute() {
+      // Prevent recalculation unless the user changed the note
+      if (!isDirty && lastComputedSnapshot === noteContent.value) return;
+
       const lines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
       if (lines.length < 2) return;
 
@@ -320,7 +331,7 @@
       let mode = "top"; // "top" | "mid" | "bottom"
       let cutSpanAbs = null;
 
-      // Priority 1: line 3
+      // Priority 1: line 3 cut
       if (lines.length >= 3) {
         const c3 = normaliseCardStrict(lines[2]);
         if (!c3) return;
@@ -357,7 +368,7 @@
         lastOutShift = String(shift);
       }
 
-      // Cleanup
+      // Cleanup note (this is a programmatic change; we mark it as settled)
       if (mode === "bottom") {
         noteContent.value = [lines[0], lines[1]].join("\n") + "\n";
       } else if (mode === "mid" && cutSpanAbs) {
@@ -366,6 +377,10 @@
       }
 
       setArmedMode(mode);
+
+      // Mark settled snapshot; disallow re-run until user edits again
+      lastComputedSnapshot = noteContent.value;
+      isDirty = false;
     }
 
     // Gestures: tap toolbar compute, hold toolbar peek; arrow reset
@@ -417,6 +432,7 @@
       setTimeout(compute, 80);
     }
 
+    // Arrow: stop propagation so toolbar tap doesn't compute
     resetBtn.addEventListener("pointerdown", e => e.stopPropagation());
     resetBtn.addEventListener("pointerup", e => e.stopPropagation());
     resetBtn.addEventListener("click", e => e.stopPropagation());
@@ -428,6 +444,10 @@
       lastOutShift = null;
       clearArmed();
       hidePeek();
+
+      // Reset snapshot gate
+      lastComputedSnapshot = null;
+      isDirty = true;
     });
 
     toolbarBtn.addEventListener("pointerdown", onDown);
