@@ -17,7 +17,6 @@
       color:#202124;
       overflow:hidden;
     }
-
     .toolbar{
       background:#f5f6f7;
       padding:15px;
@@ -30,7 +29,6 @@
       -webkit-tap-highlight-color:transparent;
       touch-action:manipulation;
     }
-
     .back-arrow{
       font-size:20px;
       color:#5f6368;
@@ -42,14 +40,11 @@
       -webkit-tap-highlight-color:transparent;
       touch-action:manipulation;
     }
-
     .title{
       font-weight:500;
       margin-left:20px;
       pointer-events:none;
-      -webkit-tap-highlight-color:transparent;
     }
-
     .calc-trigger{
       position:absolute;
       right:6px;
@@ -62,14 +57,12 @@
       justify-content:center;
       pointer-events:none;
     }
-
     .dots{
       display:flex;
       flex-direction:column;
       align-items:center;
       gap:3px;
     }
-
     .vdot{
       width:4px;
       height:4px;
@@ -77,15 +70,8 @@
       background:#5f6368;
       opacity:0.65;
     }
-
-    .calc-trigger.armed-top .vdot.top{
-      background:#202124;
-      opacity:1;
-    }
-    .calc-trigger.armed-bottom .vdot.bottom{
-      background:#202124;
-      opacity:1;
-    }
+    .calc-trigger.armed-top .vdot.top{ background:#202124; opacity:1; }
+    .calc-trigger.armed-bottom .vdot.bottom{ background:#202124; opacity:1; }
 
     .peek-arrow{
       position:absolute;
@@ -107,7 +93,6 @@
     .peek-arrow .shift{ display:block; margin-top:9px; }
 
     .note-area{ padding:20px; }
-
     .note-body{
       font-size:18px;
       border:none;
@@ -149,6 +134,8 @@
   </div>
 
   <script>
+    "use strict";
+
     // Mnemonica stack (1–52)
     const stack = [
       "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
@@ -158,80 +145,100 @@
       "10D","6C","AH","9D"
     ];
 
+    // --- State ---
     let lastOutCard = null;
     let lastOutShift = null;
 
-    function clearArmed(){
+    function clearArmed() {
       syncBtn.classList.remove("armed-top","armed-bottom");
     }
-    function setArmed(which){
+    function setArmed(usedCut) {
       clearArmed();
-      syncBtn.classList.add(which === "bottom" ? "armed-bottom" : "armed-top");
+      syncBtn.classList.add(usedCut ? "armed-bottom" : "armed-top");
     }
 
-    function showPeek(){
-      if(!lastOutCard) return;
+    function showPeek() {
+      if (!lastOutCard) return;
       peekCard.textContent = lastOutCard;
       peekShift.textContent = lastOutShift;
       peekArrow.style.display = "block";
     }
-    function hidePeek(){
+    function hidePeek() {
       peekArrow.style.display = "none";
       peekCard.textContent = "";
       peekShift.textContent = "";
     }
 
-    // --- Card parsing (requires suit cue) ---
+    // --- Parsing: cards ---
     const suitMap = {
-      "SPADES":"S","SPADE":"S","S":"S","♠":"S",
-      "HEARTS":"H","HEART":"H","H":"H","♥":"H",
-      "DIAMONDS":"D","DIAMOND":"D","D":"D","♦":"D",
-      "CLUBS":"C","CLUB":"C","C":"C","♣":"C"
+      SPADES:"S",SPADE:"S",S:"S","♠":"S",
+      HEARTS:"H",HEART:"H",H:"H","♥":"H",
+      DIAMONDS:"D",DIAMOND:"D",D:"D","♦":"D",
+      CLUBS:"C",CLUB:"C",C:"C","♣":"C"
     };
 
     const rankMap = {
-      "ACE":"A","A":"A",
-      "KING":"K","K":"K",
-      "QUEEN":"Q","Q":"Q",
-      "JACK":"J","J":"J",
-      "TEN":"10","10":"10",
-      "NINE":"9","9":"9",
-      "EIGHT":"8","8":"8",
-      "SEVEN":"7","7":"7",
-      "SIX":"6","6":"6",
-      "FIVE":"5","5":"5",
-      "FOUR":"4","4":"4",
-      "THREE":"3","3":"3",
-      "TWO":"2","2":"2"
+      ACE:"A",A:"A",KING:"K",K:"K",QUEEN:"Q",Q:"Q",JACK:"J",J:"J",
+      TEN:"10","10":"10",NINE:"9","9":"9",EIGHT:"8","8":"8",
+      SEVEN:"7","7":"7",SIX:"6","6":"6",FIVE:"5","5":"5",
+      FOUR:"4","4":"4",THREE:"3","3":"3",TWO:"2","2":"2"
     };
 
-    function normaliseCard(input){
-      if(!input) return null;
-      const raw = String(input).trim().toUpperCase();
-
-      // Compact: "AS", "10H", including suit symbols
-      const compact = raw.replace(/\s+/g,"")
-        .replaceAll("♠","S").replaceAll("♥","H").replaceAll("♦","D").replaceAll("♣","C");
-      if(/^(10|[2-9AJQK])[CDHS]$/.test(compact)) return compact;
-
-      // Wordy: requires both a rank and a suit cue
-      const tokens = raw.replace(/[^A-Z0-9♠♥♦♣ ]/g," ").split(/\s+/).filter(Boolean);
-      let suit = null;
-      let rank = null;
-
-      for(const t of tokens){
-        if(!suit && suitMap[t]) suit = suitMap[t];
-      }
-      for(const t of tokens){
-        if(!rank && rankMap[t]) rank = rankMap[t];
-      }
-
-      if(!suit || !rank) return null;
-      const out = rank + suit;
-      return (/^(10|[2-9AJQK])[CDHS]$/.test(out)) ? out : null;
+    function normaliseCardStrict(line) {
+      // Must include suit cue + rank (in any supported variation)
+      const found = findCardInText(String(line ?? ""));
+      return found ? found.code : null;
     }
 
-    // --- Number parsing (1–52), digits or words ---
+    function findCardInText(text) {
+      if (!text) return null;
+
+      const raw = String(text);
+
+      // 1) Compact: AS / 10H / with optional whitespace, suit symbols
+      // We'll match with indices so we can delete exact span if needed.
+      const compactRe = /(10|[2-9AJQK])\s*([CDHS♠♥♦♣])/ig;
+      let m;
+      while ((m = compactRe.exec(raw)) !== null) {
+        const rank = String(m[1]).toUpperCase();
+        const suitToken = m[2];
+        const suit = ({"♠":"S","♥":"H","♦":"D","♣":"C"}[suitToken] || String(suitToken).toUpperCase());
+        const code = rank + suit;
+        if (/^(10|[2-9AJQK])[CDHS]$/.test(code)) {
+          return { code, start: m.index, end: m.index + m[0].length, matched: m[0] };
+        }
+      }
+
+      // 2) Wordy: locate rank token + suit token anywhere; delete that span (between the two tokens)
+      const tokenRe = /[A-Za-z0-9♠♥♦♣]+/g;
+      const tokens = [];
+      let t;
+      while ((t = tokenRe.exec(raw)) !== null) {
+        tokens.push({ value: t[0], upper: t[0].toUpperCase(), start: t.index, end: t.index + t[0].length });
+      }
+
+      let suitTok = null;
+      let rankTok = null;
+
+      for (const tok of tokens) {
+        if (!suitTok && suitMap[tok.upper]) suitTok = tok;
+        if (!rankTok && rankMap[tok.upper]) rankTok = tok;
+        if (suitTok && rankTok) break;
+      }
+
+      if (!suitTok || !rankTok) return null;
+
+      const suit = suitMap[suitTok.upper];
+      const rank = rankMap[rankTok.upper];
+      const code = rank + suit;
+      if (!/^(10|[2-9AJQK])[CDHS]$/.test(code)) return null;
+
+      const start = Math.min(suitTok.start, rankTok.start);
+      const end = Math.max(suitTok.end, rankTok.end);
+      return { code, start, end, matched: raw.slice(start, end) };
+    }
+
+    // --- Parsing: numbers (1–52) with span ---
     const ones = {
       ONE:1,TWO:2,THREE:3,FOUR:4,FIVE:5,SIX:6,SEVEN:7,EIGHT:8,NINE:9,
       TEN:10,ELEVEN:11,TWELVE:12,THIRTEEN:13,FOURTEEN:14,FIFTEEN:15,
@@ -239,69 +246,150 @@
     };
     const tens = { TWENTY:20,THIRTY:30,FORTY:40,FIFTY:50 };
 
-    function wordsToNumber(s){
-      const raw = String(s ?? "").trim().toUpperCase();
-      if(!raw) return NaN;
+    function findPositionInLine(line) {
+      const s = String(line ?? "");
+      if (!s.trim()) return null;
 
-      const m = raw.match(/\d+/);
-      if(m) return parseInt(m[0],10);
+      // Digits first: keep exact span of first digit group
+      const d = /\d+/.exec(s);
+      if (d) {
+        const value = parseInt(d[0], 10);
+        if (value >= 1 && value <= 52) {
+          return { value, start: d.index, end: d.index + d[0].length, matched: d[0] };
+        }
+      }
 
-      const toks = raw.replace(/-/g," ").split(/\s+/).filter(Boolean);
-      if(toks.length === 1){
-        if(ones[toks[0]] != null) return ones[toks[0]];
-        if(tens[toks[0]] != null) return tens[toks[0]];
+      // Words: match the first valid 1–52 phrase, prefer longest (two-token) match
+      // Supports: "twenty one" / "twenty-one" / "seventeen"
+      const wordRe = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)(?:[-\s]+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))?\b/ig;
+
+      let best = null;
+      let m;
+      while ((m = wordRe.exec(s)) !== null) {
+        const a = String(m[1]).toUpperCase();
+        const b = m[2] ? String(m[2]).toUpperCase() : null;
+
+        let value = NaN;
+        if (ones[a] != null) value = ones[a];
+        else if (tens[a] != null && b && ones[b] != null) value = tens[a] + ones[b];
+        else if (tens[a] != null && !b) value = tens[a];
+
+        if (Number.isFinite(value) && value >= 1 && value <= 52) {
+          const cand = { value, start: m.index, end: m.index + m[0].length, matched: m[0] };
+          // Prefer longer match; if equal, earliest
+          if (!best || (cand.end - cand.start) > (best.end - best.start) || cand.start < best.start) {
+            best = cand;
+          }
+        }
       }
-      if(toks.length === 2){
-        if(tens[toks[0]] != null && ones[toks[1]] != null) return tens[toks[0]] + ones[toks[1]];
-      }
-      return NaN;
+
+      return best;
     }
 
-    function require1to52(n){
-      return Number.isFinite(n) && n >= 1 && n <= 52 ? n : NaN;
+    // --- Helper: minimal surgical deletion (preserve number text exactly) ---
+    function removeSpanPreserveSpacing(original, start, end) {
+      const before = original.slice(0, start);
+      const after = original.slice(end);
+
+      // If we cut between two whitespace runs, collapse at the boundary only.
+      const beforeEndsSpace = /\s$/.test(before);
+      const afterStartsSpace = /^\s/.test(after);
+
+      let joined = before + after;
+      if (beforeEndsSpace && afterStartsSpace) {
+        joined = before.replace(/\s+$/, " ") + after.replace(/^\s+/, "");
+      }
+
+      // Do not normalise the whole string (keeps number phrase intact).
+      // Just trim trailing spaces/newlines introduced by deletion.
+      joined = joined.replace(/[ \t]+$/g, "");
+      return joined;
     }
 
-    function positionAfterCut(op,bp){
-      const z = (op - bp - 1) % 52;
+    // --- Stack maths ---
+    function positionAfterCut(originalPos, bottomPos) {
+      const z = (originalPos - bottomPos - 1) % 52;
       return (z < 0 ? z + 52 : z) + 1;
     }
 
-    function compute(){
-      const lines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
-      if(lines.length < 2) return;
+    // --- Compute (strict: line 1 card, line 2 number; optional cut on line 3 or after number on line 2) ---
+    function compute() {
+      const linesRaw = noteContent.value.split("\n");
+      const lines = linesRaw.map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) return;
 
-      const card = normaliseCard(lines[0]);
-      const pos  = require1to52(wordsToNumber(lines[1]));
-      if(!card || isNaN(pos)) return;
+      const line1 = lines[0];
+      const line2 = lines[1];
 
-      let usedThird = false;
-      let cur;
+      const namedCard = normaliseCardStrict(line1);
+      if (!namedCard) return;
 
-      if(lines[2]){
-        const bottom = normaliseCard(lines[2]);
-        if(!bottom) return;
-        usedThird = true;
-        cur = positionAfterCut(stack.indexOf(card)+1, stack.indexOf(bottom)+1);
-        noteContent.value = lines.slice(0,2).join("\n") + "\n";
+      const posInfo = findPositionInLine(line2);
+      if (!posInfo) return;
+      const targetPos = posInfo.value;
+
+      // Basic safety: ensure namedCard exists in stack
+      const namedIdx = stack.indexOf(namedCard);
+      if (namedIdx < 0) return;
+
+      let cutCard = null;
+      let usedCut = false;
+      let cutFromLine3 = false;
+      let cutFromLine2 = false;
+      let cutSpanAbs = null; // absolute span in original line2
+
+      // Priority 1: line 3 cut card
+      if (lines.length >= 3) {
+        const c3 = normaliseCardStrict(lines[2]);
+        if (!c3) return; // strict: if they provide line 3 but it's invalid, do nothing
+        cutCard = c3;
+        usedCut = true;
+        cutFromLine3 = true;
       } else {
-        cur = stack.indexOf(card)+1;
+        // Priority 2: cut card after the number on line 2 (only scan remainder AFTER number span)
+        const remainder = line2.slice(posInfo.end);
+        const found = findCardInText(remainder);
+        if (found) {
+          cutCard = found.code;
+          usedCut = true;
+          cutFromLine2 = true;
+          cutSpanAbs = { start: posInfo.end + found.start, end: posInfo.end + found.end };
+        }
       }
 
-      const diff = cur - pos;
-      if(diff === 0){
+      // Validate cutCard exists in stack if used
+      let currentPos;
+      if (usedCut) {
+        const bottomIdx = stack.indexOf(cutCard);
+        if (bottomIdx < 0) return; // strict: invalid cut card -> do nothing
+        currentPos = positionAfterCut(namedIdx + 1, bottomIdx + 1);
+      } else {
+        currentPos = namedIdx + 1;
+      }
+
+      const diff = currentPos - targetPos;
+      if (diff === 0) {
         lastOutCard = "00";
         lastOutShift = "0";
       } else {
-        let s = diff % 52;
-        if(s < 0) s += 52;
-        lastOutCard = stack[s-1];
-        lastOutShift = String(s);
+        let shift = diff % 52;
+        if (shift < 0) shift += 52;
+        lastOutCard = stack[shift - 1];
+        lastOutShift = String(shift);
       }
 
-      setArmed(usedThird ? "bottom" : "top");
+      // Cleanup text
+      if (cutFromLine3) {
+        noteContent.value = [lines[0], lines[1]].join("\n") + "\n";
+      } else if (cutFromLine2 && cutSpanAbs) {
+        const cleanedLine2 = removeSpanPreserveSpacing(line2, cutSpanAbs.start, cutSpanAbs.end);
+        noteContent.value = [lines[0], cleanedLine2].join("\n") + "\n";
+      }
+
+      setArmed(usedCut);
     }
 
-    // --- Toolbar gestures (tap compute, hold peek) ---
+    // --- Gestures: tap toolbar compute, hold toolbar peek; arrow reset ---
     const toolbarBtn = document.getElementById("toolbarBtn");
     const resetBtn = document.getElementById("resetBtn");
 
@@ -311,17 +399,16 @@
     const HOLD_MS = 650;
     const MOVE_TOL = 10;
 
-    function clearHold(){
-      if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; }
+    function clearHold() {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
       isHolding = false;
     }
 
-    function onDown(e){
-      if(e.pointerType === "mouse" && e.button !== 0) return;
+    function onDown(e) {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
       startX = e.clientX;
       startY = e.clientY;
       isHolding = false;
-
       clearHold();
       holdTimer = setTimeout(() => {
         isHolding = true;
@@ -329,19 +416,19 @@
       }, HOLD_MS);
     }
 
-    function onMove(e){
-      if(!holdTimer) return;
-      if(Math.abs(e.clientX - startX) > MOVE_TOL || Math.abs(e.clientY - startY) > MOVE_TOL){
+    function onMove(e) {
+      if (!holdTimer) return;
+      if (Math.abs(e.clientX - startX) > MOVE_TOL || Math.abs(e.clientY - startY) > MOVE_TOL) {
         clearHold();
         hidePeek();
       }
     }
 
-    function onUp(){
+    function onUpOrCancel() {
       const wasHolding = isHolding;
       clearHold();
 
-      if(wasHolding){
+      if (wasHolding) {
         hidePeek();
         clearArmed();
         return;
@@ -351,7 +438,7 @@
       setTimeout(compute, 80);
     }
 
-    // Arrow: prevent compute
+    // Arrow: stop propagation so toolbar tap doesn't compute
     resetBtn.addEventListener("pointerdown", e => e.stopPropagation());
     resetBtn.addEventListener("pointerup", e => e.stopPropagation());
     resetBtn.addEventListener("click", e => e.stopPropagation());
@@ -367,10 +454,10 @@
 
     toolbarBtn.addEventListener("pointerdown", onDown);
     toolbarBtn.addEventListener("pointermove", onMove);
-    toolbarBtn.addEventListener("pointerup", onUp);
-    toolbarBtn.addEventListener("pointercancel", onUp);
+    toolbarBtn.addEventListener("pointerup", onUpOrCancel);
+    toolbarBtn.addEventListener("pointercancel", onUpOrCancel);
 
-    if("serviceWorker" in navigator){
+    if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/Notes/sw.js").catch(() => {});
     }
   </script>
