@@ -125,7 +125,13 @@
       resize: none;
       line-height: 1.6;
       background: transparent;
+      color: #202124;
       caret-color: #202124;
+
+      /* Android rendering consistency */
+      box-sizing: border-box;
+      padding: 0;
+      margin: 0;
     }
   </style>
 </head>
@@ -151,7 +157,8 @@
   </div>
 
   <div class="note-area">
-    <textarea id="noteContent" class="note-body" placeholder="Tap to write..."></textarea>
+    <!-- placeholder removed to avoid “Tap…” showing after reset -->
+    <textarea id="noteContent" class="note-body"></textarea>
   </div>
 
   <script>
@@ -184,6 +191,8 @@
 
     function hidePeek() {
       peekArrow.style.display = "none";
+      peekCard.textContent = "";
+      peekShift.textContent = "";
     }
 
     function parseFirstInt(s) {
@@ -221,10 +230,10 @@
         const bottom = normaliseCard(lines[2]);
         if (!bottom) return;
         usedThird = true;
-        cur = positionAfterCut(stack.indexOf(card)+1, stack.indexOf(bottom)+1);
-        noteContent.value = lines.slice(0,2).join("\n") + "\n";
+        cur = positionAfterCut(stack.indexOf(card) + 1, stack.indexOf(bottom) + 1);
+        noteContent.value = lines.slice(0, 2).join("\n") + "\n";
       } else {
-        cur = stack.indexOf(card)+1;
+        cur = stack.indexOf(card) + 1;
       }
 
       const diff = cur - pos;
@@ -232,8 +241,9 @@
         lastOutCard = "00";
         lastOutShift = "0";
       } else {
-        let s = diff % 52; if (s < 0) s += 52;
-        lastOutCard = stack[s-1];
+        let s = diff % 52;
+        if (s < 0) s += 52;
+        lastOutCard = stack[s - 1];
         lastOutShift = String(s);
       }
 
@@ -242,15 +252,6 @@
 
     /* Tap title = compute */
     titleBtn.addEventListener("click", () => setTimeout(compute, 150));
-
-    /* Back arrow always resets */
-    resetBtn.addEventListener("click", () => {
-      noteContent.value = "";
-      lastOutCard = null;
-      lastOutShift = null;
-      clearArmed();
-      hidePeek();
-    });
 
     /* Long-press title = peek */
     let holdTimer = null;
@@ -273,6 +274,16 @@
     titleBtn.addEventListener("mouseleave", holdEnd);
     titleBtn.addEventListener("touchend", holdEnd);
     titleBtn.addEventListener("touchcancel", holdEnd);
+
+    /* Back arrow always resets */
+    resetBtn.addEventListener("click", () => {
+      clearTimeout(holdTimer);
+      noteContent.value = "";
+      lastOutCard = null;
+      lastOutShift = null;
+      clearArmed();
+      hidePeek();
+    });
   </script>
 </body>
 </html>
