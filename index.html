@@ -27,7 +27,6 @@
       height:50px;
       position:relative;
       user-select:none;
-      -webkit-user-select:none;
       -webkit-tap-highlight-color:transparent;
       touch-action:manipulation;
     }
@@ -36,19 +35,19 @@
       font-size:20px;
       color:#5f6368;
       cursor:pointer;
-      -webkit-tap-highlight-color:transparent;
       position:relative;
       z-index:3;
       padding:8px 10px;
       margin:-8px -10px;
+      -webkit-tap-highlight-color:transparent;
       touch-action:manipulation;
     }
 
     .title{
       font-weight:500;
       margin-left:20px;
-      -webkit-tap-highlight-color:transparent;
       pointer-events:none;
+      -webkit-tap-highlight-color:transparent;
     }
 
     .calc-trigger{
@@ -68,7 +67,6 @@
       display:flex;
       flex-direction:column;
       align-items:center;
-      justify-content:center;
       gap:3px;
     }
 
@@ -147,10 +145,11 @@
   </div>
 
   <div class="note-area">
-    <textarea id="noteContent" class="note-body" placeholder="Tap to write..."></textarea>
+    <textarea id="noteContent" class="note-body"></textarea>
   </div>
 
   <script>
+    // Mnemonica stack (1–52)
     const stack = [
       "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
       "QC","8H","6S","5S","9H","KC","2D","JH","3S","8S","6H","10C",
@@ -170,20 +169,19 @@
       syncBtn.classList.add(which === "bottom" ? "armed-bottom" : "armed-top");
     }
 
-    function showPeekArrow(){
-      if (!lastOutCard || lastOutShift == null) return;
+    function showPeek(){
+      if(!lastOutCard) return;
       peekCard.textContent = lastOutCard;
       peekShift.textContent = lastOutShift;
       peekArrow.style.display = "block";
     }
-    function hidePeekArrow(){
+    function hidePeek(){
       peekArrow.style.display = "none";
       peekCard.textContent = "";
       peekShift.textContent = "";
     }
 
-    // ---------- Parsing helpers (cards + numbers) ----------
-
+    // --- Card parsing (requires suit cue) ---
     const suitMap = {
       "SPADES":"S","SPADE":"S","S":"S","♠":"S",
       "HEARTS":"H","HEART":"H","H":"H","♥":"H",
@@ -204,91 +202,58 @@
       "FIVE":"5","5":"5",
       "FOUR":"4","4":"4",
       "THREE":"3","3":"3",
-      "TWO":"2","2":"2",
-      "ONE":"A" // note: for cards we *don't* treat "one" as rank; we'll ignore this below
+      "TWO":"2","2":"2"
     };
 
     function normaliseCard(input){
-      if (!input) return null;
+      if(!input) return null;
       const raw = String(input).trim().toUpperCase();
 
-      // Compact formats: "AS", "10H", etc
+      // Compact: "AS", "10H", including suit symbols
       const compact = raw.replace(/\s+/g,"")
         .replaceAll("♠","S").replaceAll("♥","H").replaceAll("♦","D").replaceAll("♣","C");
-      if (/^(10|[2-9AJQK])[CDHS]$/.test(compact)) return compact;
+      if(/^(10|[2-9AJQK])[CDHS]$/.test(compact)) return compact;
 
-      // Tokenise words
-      const cleaned = raw
-        .replace(/[^A-Z0-9♠♥♦♣ ]/g," ")
-        .replace(/\s+/g," ")
-        .trim();
-
-      const tokens = cleaned.split(" ").filter(t => t && t !== "OF" && t !== "THE" && t !== "A");
-
-      // Find suit + rank in any order
+      // Wordy: requires both a rank and a suit cue
+      const tokens = raw.replace(/[^A-Z0-9♠♥♦♣ ]/g," ").split(/\s+/).filter(Boolean);
       let suit = null;
       let rank = null;
 
-      for (const t of tokens) {
-        if (!suit && suitMap[t]) suit = suitMap[t];
+      for(const t of tokens){
+        if(!suit && suitMap[t]) suit = suitMap[t];
+      }
+      for(const t of tokens){
+        if(!rank && rankMap[t]) rank = rankMap[t];
       }
 
-      for (const t of tokens) {
-        // ranks for cards: allow ACE/K/Q/J + 2..10 + word ranks
-        if (!rank) {
-          if (t === "ONE") continue; // avoid mapping "one" to Ace for cards
-          if (rankMap[t]) rank = rankMap[t];
-          else if (/^(10|[2-9])$/.test(t)) rank = t;
-        }
-      }
-
-      if (!rank || !suit) return null;
+      if(!suit || !rank) return null;
       const out = rank + suit;
       return (/^(10|[2-9AJQK])[CDHS]$/.test(out)) ? out : null;
     }
 
-    // Position words 1..52
-    const oneToNineteen = {
-      "ONE":1,"TWO":2,"THREE":3,"FOUR":4,"FIVE":5,"SIX":6,"SEVEN":7,"EIGHT":8,"NINE":9,
-      "TEN":10,"ELEVEN":11,"TWELVE":12,"THIRTEEN":13,"FOURTEEN":14,"FIFTEEN":15,"SIXTEEN":16,
-      "SEVENTEEN":17,"EIGHTEEN":18,"NINETEEN":19
+    // --- Number parsing (1–52), digits or words ---
+    const ones = {
+      ONE:1,TWO:2,THREE:3,FOUR:4,FIVE:5,SIX:6,SEVEN:7,EIGHT:8,NINE:9,
+      TEN:10,ELEVEN:11,TWELVE:12,THIRTEEN:13,FOURTEEN:14,FIFTEEN:15,
+      SIXTEEN:16,SEVENTEEN:17,EIGHTEEN:18,NINETEEN:19
     };
-    const tens = {
-      "TWENTY":20,"THIRTY":30,"FORTY":40,"FIFTY":50
-    };
+    const tens = { TWENTY:20,THIRTY:30,FORTY:40,FIFTY:50 };
 
     function wordsToNumber(s){
-      const raw = String(s ?? "").toUpperCase().trim();
-      if (!raw) return NaN;
+      const raw = String(s ?? "").trim().toUpperCase();
+      if(!raw) return NaN;
 
-      // Prefer digits anywhere
-      const m = raw.match(/-?\d+/);
-      if (m) return parseInt(m[0],10);
+      const m = raw.match(/\d+/);
+      if(m) return parseInt(m[0],10);
 
-      // Normalise separators (spaces/hyphens)
-      const tokens = raw
-        .replace(/[^A-Z -]/g," ")
-        .replace(/-/g," ")
-        .replace(/\s+/g," ")
-        .trim()
-        .split(" ")
-        .filter(Boolean);
-
-      if (!tokens.length) return NaN;
-
-      // Handle "FIFTY TWO" etc
-      if (tokens.length === 1) {
-        if (oneToNineteen[tokens[0]] != null) return oneToNineteen[tokens[0]];
-        if (tens[tokens[0]] != null) return tens[tokens[0]];
+      const toks = raw.replace(/-/g," ").split(/\s+/).filter(Boolean);
+      if(toks.length === 1){
+        if(ones[toks[0]] != null) return ones[toks[0]];
+        if(tens[toks[0]] != null) return tens[toks[0]];
       }
-
-      if (tokens.length === 2) {
-        const [a,b] = tokens;
-        if (tens[a] != null && oneToNineteen[b] != null) return tens[a] + oneToNineteen[b];
-        // Allow "TWENTY ONE" style only, not reversed
+      if(toks.length === 2){
+        if(tens[toks[0]] != null && ones[toks[1]] != null) return tens[toks[0]] + ones[toks[1]];
       }
-
-      // Handle "FIFTY TWO" / "FORTY TWO" already covered; fallthrough
       return NaN;
     }
 
@@ -296,27 +261,26 @@
       return Number.isFinite(n) && n >= 1 && n <= 52 ? n : NaN;
     }
 
-    function positionAfterCut(op, bp){
+    function positionAfterCut(op,bp){
       const z = (op - bp - 1) % 52;
       return (z < 0 ? z + 52 : z) + 1;
     }
 
-    // ---------- Compute ----------
     function compute(){
       const lines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
-      if (lines.length < 2) return;
+      if(lines.length < 2) return;
 
       const card = normaliseCard(lines[0]);
-      const pos = require1to52(wordsToNumber(lines[1]));
-      if (!card || isNaN(pos)) return;
+      const pos  = require1to52(wordsToNumber(lines[1]));
+      if(!card || isNaN(pos)) return;
 
-      let usedThirdLine = false;
+      let usedThird = false;
       let cur;
 
-      if (lines[2]) {
+      if(lines[2]){
         const bottom = normaliseCard(lines[2]);
-        if (!bottom) return;
-        usedThirdLine = true;
+        if(!bottom) return;
+        usedThird = true;
         cur = positionAfterCut(stack.indexOf(card)+1, stack.indexOf(bottom)+1);
         noteContent.value = lines.slice(0,2).join("\n") + "\n";
       } else {
@@ -324,20 +288,20 @@
       }
 
       const diff = cur - pos;
-      if (diff === 0) {
+      if(diff === 0){
         lastOutCard = "00";
         lastOutShift = "0";
       } else {
         let s = diff % 52;
-        if (s < 0) s += 52;
+        if(s < 0) s += 52;
         lastOutCard = stack[s-1];
         lastOutShift = String(s);
       }
 
-      setArmed(usedThirdLine ? "bottom" : "top");
+      setArmed(usedThird ? "bottom" : "top");
     }
 
-    // ---------- Pointer-based gestures on toolbar ----------
+    // --- Toolbar gestures (tap compute, hold peek) ---
     const toolbarBtn = document.getElementById("toolbarBtn");
     const resetBtn = document.getElementById("resetBtn");
 
@@ -348,12 +312,12 @@
     const MOVE_TOL = 10;
 
     function clearHold(){
-      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if(holdTimer){ clearTimeout(holdTimer); holdTimer = null; }
       isHolding = false;
     }
 
-    function onToolbarPointerDown(e){
-      if (e.pointerType === "mouse" && e.button !== 0) return;
+    function onDown(e){
+      if(e.pointerType === "mouse" && e.button !== 0) return;
       startX = e.clientX;
       startY = e.clientY;
       isHolding = false;
@@ -361,38 +325,36 @@
       clearHold();
       holdTimer = setTimeout(() => {
         isHolding = true;
-        showPeekArrow();
+        showPeek();
       }, HOLD_MS);
     }
 
-    function onToolbarPointerMove(e){
-      if (!holdTimer) return;
-      const dx = Math.abs(e.clientX - startX);
-      const dy = Math.abs(e.clientY - startY);
-      if (dx > MOVE_TOL || dy > MOVE_TOL) {
+    function onMove(e){
+      if(!holdTimer) return;
+      if(Math.abs(e.clientX - startX) > MOVE_TOL || Math.abs(e.clientY - startY) > MOVE_TOL){
         clearHold();
-        hidePeekArrow();
+        hidePeek();
       }
     }
 
-    function onToolbarPointerUpOrCancel(){
+    function onUp(){
       const wasHolding = isHolding;
       clearHold();
 
-      if (wasHolding) {
-        hidePeekArrow();
+      if(wasHolding){
+        hidePeek();
         clearArmed();
         return;
       }
 
-      hidePeekArrow();
+      hidePeek();
       setTimeout(compute, 80);
     }
 
-    // Arrow: stop propagation so it doesn't compute
-    resetBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-    resetBtn.addEventListener("pointerup", (e) => e.stopPropagation());
-    resetBtn.addEventListener("click", (e) => e.stopPropagation());
+    // Arrow: prevent compute
+    resetBtn.addEventListener("pointerdown", e => e.stopPropagation());
+    resetBtn.addEventListener("pointerup", e => e.stopPropagation());
+    resetBtn.addEventListener("click", e => e.stopPropagation());
 
     resetBtn.addEventListener("click", () => {
       clearHold();
@@ -400,15 +362,15 @@
       lastOutCard = null;
       lastOutShift = null;
       clearArmed();
-      hidePeekArrow();
+      hidePeek();
     });
 
-    toolbarBtn.addEventListener("pointerdown", onToolbarPointerDown);
-    toolbarBtn.addEventListener("pointermove", onToolbarPointerMove);
-    toolbarBtn.addEventListener("pointerup", onToolbarPointerUpOrCancel);
-    toolbarBtn.addEventListener("pointercancel", onToolbarPointerUpOrCancel);
+    toolbarBtn.addEventListener("pointerdown", onDown);
+    toolbarBtn.addEventListener("pointermove", onMove);
+    toolbarBtn.addEventListener("pointerup", onUp);
+    toolbarBtn.addEventListener("pointercancel", onUp);
 
-    if ("serviceWorker" in navigator) {
+    if("serviceWorker" in navigator){
       navigator.serviceWorker.register("/Notes/sw.js").catch(() => {});
     }
   </script>
