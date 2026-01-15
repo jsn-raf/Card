@@ -156,7 +156,6 @@
   <script>
     "use strict";
 
-    // Elements
     const toolbarBtn  = document.getElementById("toolbarBtn");
     const resetBtn    = document.getElementById("resetBtn");
     const syncBtn     = document.getElementById("syncBtn");
@@ -165,10 +164,8 @@
     const peekCard    = document.getElementById("peekCard");
     const peekShift   = document.getElementById("peekShift");
 
-    // Reduce Android selection/callout interference
     toolbarBtn.addEventListener("contextmenu", (e) => e.preventDefault());
 
-    // Mnemonica (1–52)
     const stack = [
       "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
       "QC","8H","6S","5S","9H","KC","2D","JH","3S","8S","6H","10C",
@@ -177,13 +174,11 @@
       "10D","6C","AH","9D"
     ];
 
-    // State
     let lastOutCard = null;
     let lastOutShift = null;
     let lastComputedSnapshot = null;
     let isDirty = true;
 
-    // Clear stale output as soon as you type anything
     noteContent.addEventListener("input", () => {
       isDirty = true;
       lastOutCard = null;
@@ -214,7 +209,6 @@
       peekShift.textContent = "";
     }
 
-    // Parsing helpers
     const suitMap = {
       SPADES:"S",SPADE:"S",S:"S","♠":"S",
       HEARTS:"H",HEART:"H",H:"H","♥":"H",
@@ -232,19 +226,15 @@
       if (!text) return null;
       const raw = String(text);
 
-      // Compact: "7D", "10H", "A♠", optional whitespace
       const compactRe = /(10|[2-9AJQK])\s*([CDHS♠♥♦♣])/ig;
       let m;
       while ((m = compactRe.exec(raw)) !== null) {
         const r = String(m[1]).toUpperCase();
         const s = ({"♠":"S","♥":"H","♦":"D","♣":"C"}[m[2]] || String(m[2]).toUpperCase());
         const code = r + s;
-        if (/^(10|[2-9AJQK])[CDHS]$/.test(code)) {
-          return { code, start: m.index, end: m.index + m[0].length };
-        }
+        if (/^(10|[2-9AJQK])[CDHS]$/.test(code)) return { code, start: m.index, end: m.index + m[0].length };
       }
 
-      // Wordy tokens: first suit + first rank anywhere
       const tokenRe = /[A-Za-z0-9♠♥♦♣]+/g;
       let t;
       let suitTok = null, rankTok = null;
@@ -253,18 +243,13 @@
         const u = t[0].toUpperCase();
         const s = t.index;
         const e = s + t[0].length;
-
         if (!suitTok && suitMap[u]) suitTok = { u, s, e };
         if (!rankTok && rankMap[u]) rankTok = { u, s, e };
         if (suitTok && rankTok) break;
       }
-
       if (!suitTok || !rankTok) return null;
 
-      const code = rankMap[rankTok.u] + suitMap[suitTok.u];
-      if (!/^(10|[2-9AJQK])[CDHS]$/.test(code)) return null;
-
-      return { code, start: Math.min(suitTok.s, rankTok.s), end: Math.max(suitTok.e, rankTok.e) };
+      return { code: rankMap[rankTok.u] + suitMap[suitTok.u], start: Math.min(suitTok.s, rankTok.s), end: Math.max(suitTok.e, rankTok.e) };
     }
 
     function normaliseCard(line){
@@ -272,7 +257,6 @@
       return f ? f.code : null;
     }
 
-    // Number words (1–52); keep string length stable (no space collapsing)
     function normaliseNumberTextKeepLength(s){
       return String(s ?? "")
         .replace(/\u00A0/g, " ")
@@ -319,8 +303,7 @@
     function removeSpanPolished(orig, start, end){
       let before = orig.slice(0, start).replace(/\b(of|the)\b[\s\-]*$/i, "");
       let after  = orig.slice(end).replace(/^[\s\-]*\b(of|the)\b/i, "");
-      let joined = (before + after).replace(/\s{2,}/g, " ").replace(/[ \t]+$/g, "");
-      return joined;
+      return (before + after).replace(/\s{2,}/g, " ").replace(/[ \t]+$/g, "");
     }
 
     function positionAfterCut(originalPos, bottomPos){
@@ -329,7 +312,6 @@
     }
 
     function compute(){
-      // Don’t recompute unless the user has edited
       if (!isDirty && lastComputedSnapshot === noteContent.value) return;
 
       const raw = noteContent.value.split("\n");
@@ -349,7 +331,7 @@
       if (namedIdx < 0) return;
 
       let cutCard = null;
-      let mode = "top"; // top (no cut), mid (inline cut), bottom (line3 cut)
+      let mode = "top";
       let inlineSpan = null;
 
       if (line3.trim()) {
@@ -376,7 +358,11 @@
         currentPos = namedIdx + 1;
       }
 
-      const diff = currentPos - posInfo.value;
+      // OPTION B (inclusive dealing):
+      // They say "N" and you DEAL the Nth card, so we compare to (N+1) in cut-position terms.
+      const effectiveTarget = posInfo.value + 1;
+      const diff = currentPos - effectiveTarget;
+
       if (diff === 0) {
         lastOutCard = "00";
         lastOutShift = "0";
@@ -387,7 +373,6 @@
         lastOutShift = String(shift);
       }
 
-      // Clean up cut input only (preserve how they typed line1/line2 otherwise)
       if (mode === "bottom") {
         noteContent.value = line1 + "\n" + line2;
       } else if (mode === "mid" && inlineSpan) {
@@ -399,7 +384,6 @@
       isDirty = false;
     }
 
-    // Gestures: tap toolbar runs, hold shows peek (peek-only), arrow resets
     const HOLD_MS = 650;
     const MOVE_TOL = 10;
 
@@ -416,7 +400,6 @@
       startedOnReset = !!(e.target && e.target.closest && e.target.closest("#resetBtn"));
       if (startedOnReset) return;
 
-      // IME stability: blur early
       if (document.activeElement === noteContent) noteContent.blur();
 
       peekShownThisGesture = false;
@@ -437,7 +420,6 @@
       if (Math.abs(e.clientX - startX) > MOVE_TOL || Math.abs(e.clientY - startY) > MOVE_TOL) {
         clearHold();
         hidePeek();
-        // NOTE: do not clear peekShownThisGesture – if peek was shown, gesture stays peek-only
       }
     }
 
