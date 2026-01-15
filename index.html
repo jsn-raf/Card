@@ -29,7 +29,7 @@
       user-select:none;
       -webkit-user-select:none;
       -webkit-tap-highlight-color:transparent;
-      touch-action:manipulation; /* reduce click delay, avoid scroll interpretation */
+      touch-action:manipulation;
     }
 
     .back-arrow{
@@ -39,8 +39,8 @@
       -webkit-tap-highlight-color:transparent;
       position:relative;
       z-index:3;
-      padding:8px 10px;         /* larger touch target */
-      margin:-8px -10px;        /* keep visual position while expanding target */
+      padding:8px 10px;
+      margin:-8px -10px;
       touch-action:manipulation;
     }
 
@@ -48,10 +48,9 @@
       font-weight:500;
       margin-left:20px;
       -webkit-tap-highlight-color:transparent;
-      pointer-events:none; /* toolbar handles taps, not the text span */
+      pointer-events:none;
     }
 
-    /* Dots indicator (non-interactive) */
     .calc-trigger{
       position:absolute;
       right:6px;
@@ -81,7 +80,6 @@
       opacity:0.65;
     }
 
-    /* Armed indicators */
     .calc-trigger.armed-top .vdot.top{
       background:#202124;
       opacity:1;
@@ -91,10 +89,9 @@
       opacity:1;
     }
 
-    /* Peek above / below arrow */
     .peek-arrow{
       position:absolute;
-      left:24px; /* nudged right of arrow head */
+      left:24px;
       top:50%;
       transform:translateY(-50%);
       display:none;
@@ -130,7 +127,6 @@
 </head>
 
 <body>
-  <!-- Toolbar is the tap target (except arrow). -->
   <div class="toolbar" id="toolbarBtn">
     <span class="back-arrow" id="resetBtn">←</span>
 
@@ -167,13 +163,11 @@
     let lastOutShift = null;
 
     function clearArmed(){
-      syncBtn.classList.remove("armed-top");
-      syncBtn.classList.remove("armed-bottom");
+      syncBtn.classList.remove("armed-top","armed-bottom");
     }
     function setArmed(which){
       clearArmed();
-      if (which === "bottom") syncBtn.classList.add("armed-bottom");
-      else syncBtn.classList.add("armed-top");
+      syncBtn.classList.add(which === "bottom" ? "armed-bottom" : "armed-top");
     }
 
     function showPeekArrow(){
@@ -188,30 +182,132 @@
       peekShift.textContent = "";
     }
 
-    function parseFirstInt(s){
-      const m = String(s ?? "").match(/-?\d+/);
-      return m ? parseInt(m[0], 10) : NaN;
+    // ---------- Parsing helpers (cards + numbers) ----------
+
+    const suitMap = {
+      "SPADES":"S","SPADE":"S","S":"S","♠":"S",
+      "HEARTS":"H","HEART":"H","H":"H","♥":"H",
+      "DIAMONDS":"D","DIAMOND":"D","D":"D","♦":"D",
+      "CLUBS":"C","CLUB":"C","C":"C","♣":"C"
+    };
+
+    const rankMap = {
+      "ACE":"A","A":"A",
+      "KING":"K","K":"K",
+      "QUEEN":"Q","Q":"Q",
+      "JACK":"J","J":"J",
+      "TEN":"10","10":"10",
+      "NINE":"9","9":"9",
+      "EIGHT":"8","8":"8",
+      "SEVEN":"7","7":"7",
+      "SIX":"6","6":"6",
+      "FIVE":"5","5":"5",
+      "FOUR":"4","4":"4",
+      "THREE":"3","3":"3",
+      "TWO":"2","2":"2",
+      "ONE":"A" // note: for cards we *don't* treat "one" as rank; we'll ignore this below
+    };
+
+    function normaliseCard(input){
+      if (!input) return null;
+      const raw = String(input).trim().toUpperCase();
+
+      // Compact formats: "AS", "10H", etc
+      const compact = raw.replace(/\s+/g,"")
+        .replaceAll("♠","S").replaceAll("♥","H").replaceAll("♦","D").replaceAll("♣","C");
+      if (/^(10|[2-9AJQK])[CDHS]$/.test(compact)) return compact;
+
+      // Tokenise words
+      const cleaned = raw
+        .replace(/[^A-Z0-9♠♥♦♣ ]/g," ")
+        .replace(/\s+/g," ")
+        .trim();
+
+      const tokens = cleaned.split(" ").filter(t => t && t !== "OF" && t !== "THE" && t !== "A");
+
+      // Find suit + rank in any order
+      let suit = null;
+      let rank = null;
+
+      for (const t of tokens) {
+        if (!suit && suitMap[t]) suit = suitMap[t];
+      }
+
+      for (const t of tokens) {
+        // ranks for cards: allow ACE/K/Q/J + 2..10 + word ranks
+        if (!rank) {
+          if (t === "ONE") continue; // avoid mapping "one" to Ace for cards
+          if (rankMap[t]) rank = rankMap[t];
+          else if (/^(10|[2-9])$/.test(t)) rank = t;
+        }
+      }
+
+      if (!rank || !suit) return null;
+      const out = rank + suit;
+      return (/^(10|[2-9AJQK])[CDHS]$/.test(out)) ? out : null;
     }
+
+    // Position words 1..52
+    const oneToNineteen = {
+      "ONE":1,"TWO":2,"THREE":3,"FOUR":4,"FIVE":5,"SIX":6,"SEVEN":7,"EIGHT":8,"NINE":9,
+      "TEN":10,"ELEVEN":11,"TWELVE":12,"THIRTEEN":13,"FOURTEEN":14,"FIFTEEN":15,"SIXTEEN":16,
+      "SEVENTEEN":17,"EIGHTEEN":18,"NINETEEN":19
+    };
+    const tens = {
+      "TWENTY":20,"THIRTY":30,"FORTY":40,"FIFTY":50
+    };
+
+    function wordsToNumber(s){
+      const raw = String(s ?? "").toUpperCase().trim();
+      if (!raw) return NaN;
+
+      // Prefer digits anywhere
+      const m = raw.match(/-?\d+/);
+      if (m) return parseInt(m[0],10);
+
+      // Normalise separators (spaces/hyphens)
+      const tokens = raw
+        .replace(/[^A-Z -]/g," ")
+        .replace(/-/g," ")
+        .replace(/\s+/g," ")
+        .trim()
+        .split(" ")
+        .filter(Boolean);
+
+      if (!tokens.length) return NaN;
+
+      // Handle "FIFTY TWO" etc
+      if (tokens.length === 1) {
+        if (oneToNineteen[tokens[0]] != null) return oneToNineteen[tokens[0]];
+        if (tens[tokens[0]] != null) return tens[tokens[0]];
+      }
+
+      if (tokens.length === 2) {
+        const [a,b] = tokens;
+        if (tens[a] != null && oneToNineteen[b] != null) return tens[a] + oneToNineteen[b];
+        // Allow "TWENTY ONE" style only, not reversed
+      }
+
+      // Handle "FIFTY TWO" / "FORTY TWO" already covered; fallthrough
+      return NaN;
+    }
+
     function require1to52(n){
       return Number.isFinite(n) && n >= 1 && n <= 52 ? n : NaN;
     }
-    function normaliseCard(input){
-      if (!input) return null;
-      const raw = input.toUpperCase().replace(/\s+/g, "");
-      if (/^(10|[2-9AJQK])[CDHS]$/.test(raw)) return raw;
-      return null;
-    }
+
     function positionAfterCut(op, bp){
       const z = (op - bp - 1) % 52;
       return (z < 0 ? z + 52 : z) + 1;
     }
 
+    // ---------- Compute ----------
     function compute(){
       const lines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
       if (lines.length < 2) return;
 
       const card = normaliseCard(lines[0]);
-      const pos = require1to52(parseFirstInt(lines[1]));
+      const pos = require1to52(wordsToNumber(lines[1]));
       if (!card || isNaN(pos)) return;
 
       let usedThirdLine = false;
@@ -221,10 +317,10 @@
         const bottom = normaliseCard(lines[2]);
         if (!bottom) return;
         usedThirdLine = true;
-        cur = positionAfterCut(stack.indexOf(card) + 1, stack.indexOf(bottom) + 1);
+        cur = positionAfterCut(stack.indexOf(card)+1, stack.indexOf(bottom)+1);
         noteContent.value = lines.slice(0,2).join("\n") + "\n";
       } else {
-        cur = stack.indexOf(card) + 1;
+        cur = stack.indexOf(card)+1;
       }
 
       const diff = cur - pos;
@@ -234,14 +330,14 @@
       } else {
         let s = diff % 52;
         if (s < 0) s += 52;
-        lastOutCard = stack[s - 1];
+        lastOutCard = stack[s-1];
         lastOutShift = String(s);
       }
 
       setArmed(usedThirdLine ? "bottom" : "top");
     }
 
-    // --- Pointer-based gesture handling on the whole toolbar ---
+    // ---------- Pointer-based gestures on toolbar ----------
     const toolbarBtn = document.getElementById("toolbarBtn");
     const resetBtn = document.getElementById("resetBtn");
 
@@ -249,7 +345,7 @@
     let isHolding = false;
     let startX = 0, startY = 0;
     const HOLD_MS = 650;
-    const MOVE_TOL = 10; // px, cancel hold if user moves finger
+    const MOVE_TOL = 10;
 
     function clearHold(){
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
@@ -257,9 +353,7 @@
     }
 
     function onToolbarPointerDown(e){
-      // Ignore non-primary pointers
       if (e.pointerType === "mouse" && e.button !== 0) return;
-
       startX = e.clientX;
       startY = e.clientY;
       isHolding = false;
@@ -276,7 +370,6 @@
       const dx = Math.abs(e.clientX - startX);
       const dy = Math.abs(e.clientY - startY);
       if (dx > MOVE_TOL || dy > MOVE_TOL) {
-        // User is moving – treat as scroll/gesture, cancel hold + no compute
         clearHold();
         hidePeekArrow();
       }
@@ -287,18 +380,16 @@
       clearHold();
 
       if (wasHolding) {
-        // End of hold: hide peek + clear dot indicator (your prior behaviour)
         hidePeekArrow();
         clearArmed();
         return;
       }
 
-      // Quick tap anywhere in toolbar (except arrow) computes
       hidePeekArrow();
       setTimeout(compute, 80);
     }
 
-    // Prevent arrow from triggering toolbar handlers
+    // Arrow: stop propagation so it doesn't compute
     resetBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
     resetBtn.addEventListener("pointerup", (e) => e.stopPropagation());
     resetBtn.addEventListener("click", (e) => e.stopPropagation());
