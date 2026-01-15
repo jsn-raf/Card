@@ -10,146 +10,137 @@
   <meta name="mobile-web-app-capable" content="yes">
 
   <style>
-    body {
-      font-family: 'Segoe UI', Roboto, sans-serif;
-      margin: 0;
-      background: #fff;
-      color: #202124;
-      overflow: hidden;
+    body{
+      font-family:'Segoe UI', Roboto, sans-serif;
+      margin:0;
+      background:#fff;
+      color:#202124;
+      overflow:hidden;
     }
 
-    .toolbar {
-      background: #f5f6f7;
-      padding: 15px;
-      display: flex;
-      align-items: center;
-      border-bottom: 1px solid #e3e5e7;
-      height: 50px;
-      position: relative;
+    .toolbar{
+      background:#f5f6f7;
+      padding:15px;
+      display:flex;
+      align-items:center;
+      border-bottom:1px solid #e3e5e7;
+      height:50px;
+      position:relative;
+      user-select:none;
+      -webkit-user-select:none;
+      -webkit-tap-highlight-color:transparent;
+      touch-action:manipulation; /* reduce click delay, avoid scroll interpretation */
     }
 
-    .back-arrow {
-      font-size: 20px;
-      color: #5f6368;
-      cursor: pointer;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-      position: relative;
-      z-index: 2;
+    .back-arrow{
+      font-size:20px;
+      color:#5f6368;
+      cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+      position:relative;
+      z-index:3;
+      padding:8px 10px;         /* larger touch target */
+      margin:-8px -10px;        /* keep visual position while expanding target */
+      touch-action:manipulation;
     }
 
-    .title {
-      font-weight: 500;
-      margin-left: 20px;
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
-      -webkit-tap-highlight-color: transparent;
-      cursor: pointer; /* now tappable to compute */
+    .title{
+      font-weight:500;
+      margin-left:20px;
+      -webkit-tap-highlight-color:transparent;
+      pointer-events:none; /* toolbar handles taps, not the text span */
     }
 
-    /* Dots control (indicator only) */
-    .calc-trigger {
-      position: absolute;
-      right: 6px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 44px;
-      height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-      pointer-events: none; /* indicator only */
+    /* Dots indicator (non-interactive) */
+    .calc-trigger{
+      position:absolute;
+      right:6px;
+      top:50%;
+      transform:translateY(-50%);
+      width:44px;
+      height:44px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      pointer-events:none;
     }
 
-    .dots {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 3px;
+    .dots{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:3px;
     }
 
-    .vdot {
-      width: 4px;
-      height: 4px;
-      border-radius: 50%;
-      background: #5f6368;
-      opacity: 0.65;
+    .vdot{
+      width:4px;
+      height:4px;
+      border-radius:50%;
+      background:#5f6368;
+      opacity:0.65;
     }
 
     /* Armed indicators */
-    .calc-trigger.armed-top .vdot.top {
-      background: #202124;
-      opacity: 1;
+    .calc-trigger.armed-top .vdot.top{
+      background:#202124;
+      opacity:1;
     }
-    .calc-trigger.armed-bottom .vdot.bottom {
-      background: #202124;
-      opacity: 1;
-    }
-
-    /* Peek anchored near arrow (nudged right) */
-    .peek-arrow {
-      position: absolute;
-      left: 24px;
-      top: 50%;
-      transform: translateY(-50%);
-      display: none;
-      pointer-events: none;
-      user-select: none;
-      -webkit-user-select: none;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1;
-      letter-spacing: 0.02em;
-      color: #202124;
-      text-align: center;
+    .calc-trigger.armed-bottom .vdot.bottom{
+      background:#202124;
+      opacity:1;
     }
 
-    .peek-arrow .card {
-      display: block;
-      margin-bottom: 9px;
+    /* Peek above / below arrow */
+    .peek-arrow{
+      position:absolute;
+      left:24px; /* nudged right of arrow head */
+      top:50%;
+      transform:translateY(-50%);
+      display:none;
+      pointer-events:none;
+      font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size:12px;
+      font-weight:700;
+      line-height:1;
+      letter-spacing:0.02em;
+      color:#202124;
+      text-align:center;
+      z-index:2;
     }
-    .peek-arrow .shift {
-      display: block;
-      margin-top: 9px;
-    }
+    .peek-arrow .card{ display:block; margin-bottom:9px; }
+    .peek-arrow .shift{ display:block; margin-top:9px; }
 
-    .note-area { padding: 20px; }
+    .note-area{ padding:20px; }
 
-    .note-body {
-      font-size: 18px;
-      border: none;
-      outline: none;
-      width: 100%;
-      min-height: calc(100vh - 120px);
-      resize: none;
-      line-height: 1.6;
-      background: transparent;
-      color: #202124;
-      caret-color: #202124;
-      -webkit-overflow-scrolling: touch;
+    .note-body{
+      font-size:18px;
+      border:none;
+      outline:none;
+      width:100%;
+      min-height:calc(100vh - 120px);
+      resize:none;
+      line-height:1.6;
+      background:transparent;
+      color:#202124;
+      caret-color:#202124;
+      -webkit-overflow-scrolling:touch;
     }
   </style>
 </head>
 
 <body>
-  <div class="toolbar">
+  <!-- Toolbar is the tap target (except arrow). -->
+  <div class="toolbar" id="toolbarBtn">
     <span class="back-arrow" id="resetBtn">←</span>
 
-    <!-- Peek above / below arrow -->
     <div class="peek-arrow" id="peekArrow">
       <span class="card" id="peekCard"></span>
       <span class="shift" id="peekShift"></span>
     </div>
 
-    <!-- Header tap computes; long-press peeks -->
-    <span class="title" id="titleBtn">Quick Notes</span>
+    <span class="title">Quick Notes</span>
 
-    <!-- Dots are indicators only -->
     <div class="calc-trigger" id="syncBtn" aria-hidden="true">
       <div class="dots">
         <span class="vdot top"></span>
@@ -175,47 +166,47 @@
     let lastOutCard = null;
     let lastOutShift = null;
 
-    function clearArmed() {
+    function clearArmed(){
       syncBtn.classList.remove("armed-top");
       syncBtn.classList.remove("armed-bottom");
     }
-    function setArmed(which) {
+    function setArmed(which){
       clearArmed();
       if (which === "bottom") syncBtn.classList.add("armed-bottom");
       else syncBtn.classList.add("armed-top");
     }
 
-    function showPeekArrow() {
+    function showPeekArrow(){
       if (!lastOutCard || lastOutShift == null) return;
       peekCard.textContent = lastOutCard;
       peekShift.textContent = lastOutShift;
       peekArrow.style.display = "block";
     }
-    function hidePeekArrow() {
+    function hidePeekArrow(){
       peekArrow.style.display = "none";
       peekCard.textContent = "";
       peekShift.textContent = "";
     }
 
-    function parseFirstInt(s) {
+    function parseFirstInt(s){
       const m = String(s ?? "").match(/-?\d+/);
       return m ? parseInt(m[0], 10) : NaN;
     }
-    function require1to52(n) {
+    function require1to52(n){
       return Number.isFinite(n) && n >= 1 && n <= 52 ? n : NaN;
     }
-    function normaliseCard(input) {
+    function normaliseCard(input){
       if (!input) return null;
       const raw = input.toUpperCase().replace(/\s+/g, "");
       if (/^(10|[2-9AJQK])[CDHS]$/.test(raw)) return raw;
       return null;
     }
-    function positionAfterCut(op, bp) {
+    function positionAfterCut(op, bp){
       const z = (op - bp - 1) % 52;
       return (z < 0 ? z + 52 : z) + 1;
     }
 
-    function compute() {
+    function compute(){
       const lines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
       if (lines.length < 2) return;
 
@@ -230,10 +221,10 @@
         const bottom = normaliseCard(lines[2]);
         if (!bottom) return;
         usedThirdLine = true;
-        cur = positionAfterCut(stack.indexOf(card)+1, stack.indexOf(bottom)+1);
+        cur = positionAfterCut(stack.indexOf(card) + 1, stack.indexOf(bottom) + 1);
         noteContent.value = lines.slice(0,2).join("\n") + "\n";
       } else {
-        cur = stack.indexOf(card)+1;
+        cur = stack.indexOf(card) + 1;
       }
 
       const diff = cur - pos;
@@ -243,18 +234,77 @@
       } else {
         let s = diff % 52;
         if (s < 0) s += 52;
-        lastOutCard = stack[s-1];
+        lastOutCard = stack[s - 1];
         lastOutShift = String(s);
       }
 
       setArmed(usedThirdLine ? "bottom" : "top");
     }
 
-    /* Single tap header computes */
-    titleBtn.addEventListener("click", () => setTimeout(compute, 150));
+    // --- Pointer-based gesture handling on the whole toolbar ---
+    const toolbarBtn = document.getElementById("toolbarBtn");
+    const resetBtn = document.getElementById("resetBtn");
 
-    /* Back arrow resets */
+    let holdTimer = null;
+    let isHolding = false;
+    let startX = 0, startY = 0;
+    const HOLD_MS = 650;
+    const MOVE_TOL = 10; // px, cancel hold if user moves finger
+
+    function clearHold(){
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      isHolding = false;
+    }
+
+    function onToolbarPointerDown(e){
+      // Ignore non-primary pointers
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+
+      startX = e.clientX;
+      startY = e.clientY;
+      isHolding = false;
+
+      clearHold();
+      holdTimer = setTimeout(() => {
+        isHolding = true;
+        showPeekArrow();
+      }, HOLD_MS);
+    }
+
+    function onToolbarPointerMove(e){
+      if (!holdTimer) return;
+      const dx = Math.abs(e.clientX - startX);
+      const dy = Math.abs(e.clientY - startY);
+      if (dx > MOVE_TOL || dy > MOVE_TOL) {
+        // User is moving – treat as scroll/gesture, cancel hold + no compute
+        clearHold();
+        hidePeekArrow();
+      }
+    }
+
+    function onToolbarPointerUpOrCancel(){
+      const wasHolding = isHolding;
+      clearHold();
+
+      if (wasHolding) {
+        // End of hold: hide peek + clear dot indicator (your prior behaviour)
+        hidePeekArrow();
+        clearArmed();
+        return;
+      }
+
+      // Quick tap anywhere in toolbar (except arrow) computes
+      hidePeekArrow();
+      setTimeout(compute, 80);
+    }
+
+    // Prevent arrow from triggering toolbar handlers
+    resetBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    resetBtn.addEventListener("pointerup", (e) => e.stopPropagation());
+    resetBtn.addEventListener("click", (e) => e.stopPropagation());
+
     resetBtn.addEventListener("click", () => {
+      clearHold();
       noteContent.value = "";
       lastOutCard = null;
       lastOutShift = null;
@@ -262,26 +312,10 @@
       hidePeekArrow();
     });
 
-    /* Long-press header peeks */
-    let holdTimer = null;
-    const HOLD_MS = 650;
-
-    function holdStart(e) {
-      if (e && e.preventDefault) e.preventDefault();
-      holdTimer = setTimeout(showPeekArrow, HOLD_MS);
-    }
-    function holdEnd() {
-      clearTimeout(holdTimer);
-      hidePeekArrow();
-      clearArmed();
-    }
-
-    titleBtn.addEventListener("mousedown", holdStart);
-    titleBtn.addEventListener("touchstart", holdStart, { passive:false });
-    titleBtn.addEventListener("mouseup", holdEnd);
-    titleBtn.addEventListener("mouseleave", holdEnd);
-    titleBtn.addEventListener("touchend", holdEnd);
-    titleBtn.addEventListener("touchcancel", holdEnd);
+    toolbarBtn.addEventListener("pointerdown", onToolbarPointerDown);
+    toolbarBtn.addEventListener("pointermove", onToolbarPointerMove);
+    toolbarBtn.addEventListener("pointerup", onToolbarPointerUpOrCancel);
+    toolbarBtn.addEventListener("pointercancel", onToolbarPointerUpOrCancel);
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/Notes/sw.js").catch(() => {});
