@@ -45,7 +45,7 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* Fixed-size control area */
+    /* Fixed-size control area (dots) */
     .calc-trigger {
       position: absolute;
       right: 6px;
@@ -61,26 +61,18 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* Shared inner footprint for dots + peek */
-    :root{
-      --innerH: 18px; /* 4 + 2 + 4 + 2 + 4 = 16; keep 18 for comfortable centring */
-      --dot: 4px;
-      --gap: 2px;     /* tighter than 3px: brings top/bottom closer */
-    }
-
-    /* Dots layout (fixed footprint) */
+    /* Dots layout */
     .dots {
-      height: var(--innerH);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: var(--gap);
+      gap: 3px;
     }
 
     .vdot {
-      width: var(--dot);
-      height: var(--dot);
+      width: 4px;
+      height: 4px;
       border-radius: 50%;
       background: #5f6368;
       opacity: 0.65;
@@ -92,35 +84,26 @@
       opacity: 1;
     }
 
-    /* Peek layout – FORCE same footprint as dots */
-    .peek {
-      height: var(--innerH);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-
+    /* NEW: left-side peek panel near the arrow */
+    .peek-left {
+      position: absolute;
+      left: 42px;             /* just to the right of the arrow */
+      top: 50%;
+      transform: translateY(-50%);
+      display: none;          /* only show during hold */
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;     /* reduced so 3 lines fit within inner height */
+      font-size: 12px;
       font-weight: 700;
-      line-height: 1;      /* critical: avoid extra leading */
+      line-height: 1.05;
       letter-spacing: 0.02em;
       color: #202124;
-
-      gap: 0;              /* no flex gap – we control spacing manually */
+      text-align: left;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
-    .peek .line {
-      display: block;
-      margin: 0;
-      padding: 0;
-    }
-
-    .peek .sep {
-      opacity: 0.7;
-      font-weight: 900;
-      transform: translateY(-1px); /* nudge to sit where the middle dot visually reads */
-    }
+    .peek-left .row { display: block; }
 
     .note-area { padding: 20px; }
 
@@ -143,6 +126,13 @@
 <body>
   <div class="toolbar">
     <span class="back-arrow" id="resetBtn">←</span>
+
+    <!-- NEW peek area -->
+    <div class="peek-left" id="peekLeft">
+      <span class="row" id="peekCard"></span>
+      <span class="row" id="peekShift"></span>
+    </div>
+
     <span class="title" id="titleBtn">Quick Notes</span>
 
     <div class="calc-trigger" id="syncBtn" aria-label="More options">
@@ -170,26 +160,24 @@
     let lastOutCard = null;
     let lastOutShift = null;
 
+    const peekLeft = document.getElementById("peekLeft");
+    const peekCard = document.getElementById("peekCard");
+    const peekShift = document.getElementById("peekShift");
+
     function setArmed() { syncBtn.classList.add("armed"); }
     function clearArmed() { syncBtn.classList.remove("armed"); }
 
-    function showDots() {
-      syncBtn.innerHTML = `
-        <div class="dots">
-          <span class="vdot top"></span>
-          <span class="vdot"></span>
-          <span class="vdot"></span>
-        </div>`;
+    function showPeekLeft() {
+      if (!lastOutCard || lastOutShift == null) return;
+      peekCard.textContent = lastOutCard;
+      peekShift.textContent = lastOutShift;
+      peekLeft.style.display = "block";
     }
 
-    function showPeek() {
-      if (!lastOutCard || lastOutShift == null) return;
-      syncBtn.innerHTML = `
-        <div class="peek">
-          <span class="line">${lastOutCard}</span>
-          <span class="line sep">·</span>
-          <span class="line">${lastOutShift}</span>
-        </div>`;
+    function hidePeekLeft() {
+      peekLeft.style.display = "none";
+      peekCard.textContent = "";
+      peekShift.textContent = "";
     }
 
     function parseFirstInt(s) {
@@ -225,10 +213,10 @@
       if (lines[2]) {
         const bottom = normaliseCard(lines[2]);
         if (!bottom) return;
-        cur = positionAfterCut(stack.indexOf(card)+1, stack.indexOf(bottom)+1);
-        noteContent.value = lines.slice(0,2).join("\n") + "\n";
+        cur = positionAfterCut(stack.indexOf(card) + 1, stack.indexOf(bottom) + 1);
+        noteContent.value = lines.slice(0, 2).join("\n") + "\n";
       } else {
-        cur = stack.indexOf(card)+1;
+        cur = stack.indexOf(card) + 1;
       }
 
       const diff = cur - pos;
@@ -236,8 +224,9 @@
         lastOutCard = "00";
         lastOutShift = "0";
       } else {
-        let s = diff % 52; if (s < 0) s += 52;
-        lastOutCard = stack[s-1];
+        let s = diff % 52;
+        if (s < 0) s += 52;
+        lastOutCard = stack[s - 1];
         lastOutShift = String(s);
       }
       setArmed();
@@ -250,7 +239,7 @@
       lastOutCard = null;
       lastOutShift = null;
       clearArmed();
-      showDots();
+      hidePeekLeft();
     });
 
     let holdTimer = null;
@@ -258,12 +247,12 @@
 
     function holdStart(e) {
       if (e && e.preventDefault) e.preventDefault();
-      holdTimer = setTimeout(showPeek, HOLD_MS);
+      holdTimer = setTimeout(showPeekLeft, HOLD_MS);
     }
 
     function holdEnd() {
       clearTimeout(holdTimer);
-      showDots();
+      hidePeekLeft();
       clearArmed();
     }
 
