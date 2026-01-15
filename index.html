@@ -37,12 +37,15 @@
       z-index:3;
       padding:8px 10px;
       margin:-8px -10px;
+      -webkit-tap-highlight-color:transparent;
+      touch-action:manipulation;
     }
     .title{
       font-weight:500;
       margin-left:20px;
       pointer-events:none;
     }
+
     .calc-trigger{
       position:absolute;
       right:6px;
@@ -68,6 +71,8 @@
       background:#5f6368;
       opacity:0.65;
     }
+
+    /* Armed indicators */
     .calc-trigger.armed-top .vdot.top{ background:#202124; opacity:1; }
     .calc-trigger.armed-mid .vdot.mid{ background:#202124; opacity:1; }
     .calc-trigger.armed-bottom .vdot.bottom{ background:#202124; opacity:1; }
@@ -135,6 +140,7 @@
   <script>
     "use strict";
 
+    // Mnemonica stack (1–52)
     const stack = [
       "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
       "QC","8H","6S","5S","9H","KC","2D","JH","3S","8S","6H","10C",
@@ -143,152 +149,294 @@
       "10D","6C","AH","9D"
     ];
 
-    let lastOutCard=null,lastOutShift=null;
+    // State
+    let lastOutCard = null;
+    let lastOutShift = null;
 
-    function clearArmed(){ syncBtn.classList.remove("armed-top","armed-mid","armed-bottom"); }
-    function setArmedMode(mode){
+    function clearArmed() {
+      syncBtn.classList.remove("armed-top","armed-mid","armed-bottom");
+    }
+
+    // mode: "top" | "mid" | "bottom"
+    function setArmedMode(mode) {
       clearArmed();
-      syncBtn.classList.add(mode==="line3"?"armed-bottom":mode==="line2"?"armed-mid":"armed-top");
+      if (mode === "mid") syncBtn.classList.add("armed-mid");
+      else if (mode === "bottom") syncBtn.classList.add("armed-bottom");
+      else syncBtn.classList.add("armed-top");
     }
 
-    function showPeek(){
-      if(!lastOutCard) return;
-      peekCard.textContent=lastOutCard;
-      peekShift.textContent=lastOutShift;
-      peekArrow.style.display="block";
-    }
-    function hidePeek(){
-      peekArrow.style.display="none";
-      peekCard.textContent="";
-      peekShift.textContent="";
+    function showPeek() {
+      if (!lastOutCard) return;
+      peekCard.textContent = lastOutCard;
+      peekShift.textContent = lastOutShift;
+      peekArrow.style.display = "block";
     }
 
-    const suitMap={SPADES:"S",SPADE:"S",S:"S","♠":"S",HEARTS:"H",HEART:"H",H:"H","♥":"H",DIAMONDS:"D",DIAMOND:"D",D:"D","♦":"D",CLUBS:"C",CLUB:"C",C:"C","♣":"C"};
-    const rankMap={ACE:"A",A:"A",KING:"K",K:"K",QUEEN:"Q",Q:"Q",JACK:"J",J:"J",TEN:"10","10":"10",NINE:"9","9":"9",EIGHT:"8","8":"8",SEVEN:"7","7":"7",SIX:"6","6":"6",FIVE:"5","5":"5",FOUR:"4","4":"4",THREE:"3","3":"3",TWO:"2","2":"2"};
+    function hidePeek() {
+      peekArrow.style.display = "none";
+      peekCard.textContent = "";
+      peekShift.textContent = "";
+    }
 
-    function findCardInText(text){
-      if(!text) return null;
-      const raw=String(text);
-      const compactRe=/(10|[2-9AJQK])\s*([CDHS♠♥♦♣])/ig;
+    // Parsing: cards
+    const suitMap = {
+      SPADES:"S",SPADE:"S",S:"S","♠":"S",
+      HEARTS:"H",HEART:"H",H:"H","♥":"H",
+      DIAMONDS:"D",DIAMOND:"D",D:"D","♦":"D",
+      CLUBS:"C",CLUB:"C",C:"C","♣":"C"
+    };
+
+    const rankMap = {
+      ACE:"A",A:"A",KING:"K",K:"K",QUEEN:"Q",Q:"Q",JACK:"J",J:"J",
+      TEN:"10","10":"10",NINE:"9","9":"9",EIGHT:"8","8":"8",
+      SEVEN:"7","7":"7",SIX:"6","6":"6",FIVE:"5","5":"5",
+      FOUR:"4","4":"4",THREE:"3","3":"3",TWO:"2","2":"2"
+    };
+
+    function findCardInText(text) {
+      if (!text) return null;
+      const raw = String(text);
+
+      // Compact: AS / 10H / optional whitespace / suit symbols
+      const compactRe = /(10|[2-9AJQK])\s*([CDHS♠♥♦♣])/ig;
       let m;
-      while((m=compactRe.exec(raw))!==null){
-        const r=m[1].toUpperCase();
-        const s={"♠":"S","♥":"H","♦":"D","♣":"C"}[m[2]]||m[2].toUpperCase();
-        const code=r+s;
-        if(/^(10|[2-9AJQK])[CDHS]$/.test(code)) return {code,start:m.index,end:m.index+m[0].length};
+      while ((m = compactRe.exec(raw)) !== null) {
+        const rank = String(m[1]).toUpperCase();
+        const suitToken = m[2];
+        const suit = ({"♠":"S","♥":"H","♦":"D","♣":"C"}[suitToken] || String(suitToken).toUpperCase());
+        const code = rank + suit;
+        if (/^(10|[2-9AJQK])[CDHS]$/.test(code)) {
+          return { code, start: m.index, end: m.index + m[0].length };
+        }
       }
-      const tokens=[...raw.matchAll(/[A-Za-z0-9♠♥♦♣]+/g)].map(t=>({v:t[0],u:t[0].toUpperCase(),s:t.index,e:t.index+t[0].length}));
-      let suitTok=null,rankTok=null;
-      for(const t of tokens){ if(!suitTok&&suitMap[t.u]) suitTok=t; if(!rankTok&&rankMap[t.u]) rankTok=t; }
-      if(!suitTok||!rankTok) return null;
-      const code=rankMap[rankTok.u]+suitMap[suitTok.u];
-      if(!/^(10|[2-9AJQK])[CDHS]$/.test(code)) return null;
-      return {code,start:Math.min(suitTok.s,rankTok.s),end:Math.max(suitTok.e,rankTok.e)};
+
+      // Wordy: find one suit token and one rank token anywhere
+      const tokenRe = /[A-Za-z0-9♠♥♦♣]+/g;
+      const tokens = [];
+      let t;
+      while ((t = tokenRe.exec(raw)) !== null) {
+        tokens.push({ upper: t[0].toUpperCase(), start: t.index, end: t.index + t[0].length });
+      }
+
+      let suitTok = null;
+      let rankTok = null;
+      for (const tok of tokens) {
+        if (!suitTok && suitMap[tok.upper]) suitTok = tok;
+        if (!rankTok && rankMap[tok.upper]) rankTok = tok;
+        if (suitTok && rankTok) break;
+      }
+
+      if (!suitTok || !rankTok) return null;
+
+      const code = rankMap[rankTok.upper] + suitMap[suitTok.upper];
+      if (!/^(10|[2-9AJQK])[CDHS]$/.test(code)) return null;
+
+      const start = Math.min(suitTok.start, rankTok.start);
+      const end = Math.max(suitTok.end, rankTok.end);
+      return { code, start, end };
     }
 
-    const ones={ONE:1,TWO:2,THREE:3,FOUR:4,FIVE:5,SIX:6,SEVEN:7,EIGHT:8,NINE:9,TEN:10,ELEVEN:11,TWELVE:12,THIRTEEN:13,FOURTEEN:14,FIFTEEN:15,SIXTEEN:16,SEVENTEEN:17,EIGHTEEN:18,NINETEEN:19};
-    const tens={TWENTY:20,THIRTY:30,FORTY:40,FIFTY:50};
+    function normaliseCardStrict(line) {
+      const found = findCardInText(String(line ?? ""));
+      return found ? found.code : null;
+    }
 
-    function findPositionInLine(line){
-      const s=String(line);
-      const d=/\d+/.exec(s);
-      if(d){ const v=parseInt(d[0],10); if(v>=1&&v<=52) return {value:v,start:d.index,end:d.index+d[0].length}; }
-      const re=/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)(?:[-\s]+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))?\b/ig;
-      let best=null,m;
-      while((m=re.exec(s))!==null){
-        const a=m[1].toUpperCase(),b=m[2]?.toUpperCase();
-        let v=ones[a]??(tens[a]?(b? tenses:undefined):undefined);
-        if(tens[a]) v=b&&ones[b]?tens[a]+ones[b]:tens[a];
-        if(Number.isFinite(v)&&v>=1&&v<=52){
-          const cand={value:v,start:m.index,end:m.index+m[0].length};
-          if(!best||cand.end-cand.start>best.end-best.start) best=cand;
+    // Parsing: position numbers (1–52) with span
+    const ones = {
+      ONE:1,TWO:2,THREE:3,FOUR:4,FIVE:5,SIX:6,SEVEN:7,EIGHT:8,NINE:9,
+      TEN:10,ELEVEN:11,TWELVE:12,THIRTEEN:13,FOURTEEN:14,FIFTEEN:15,
+      SIXTEEN:16,SEVENTEEN:17,EIGHTEEN:18,NINETEEN:19
+    };
+    const tens = { TWENTY:20,THIRTY:30,FORTY:40,FIFTY:50 };
+
+    function findPositionInLine(line) {
+      const s = String(line ?? "");
+      if (!s.trim()) return null;
+
+      const d = /\d+/.exec(s);
+      if (d) {
+        const value = parseInt(d[0], 10);
+        if (value >= 1 && value <= 52) {
+          return { value, start: d.index, end: d.index + d[0].length };
+        }
+      }
+
+      const wordRe = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)(?:[-\s]+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))?\b/ig;
+
+      let best = null;
+      let m;
+      while ((m = wordRe.exec(s)) !== null) {
+        const a = String(m[1]).toUpperCase();
+        const b = m[2] ? String(m[2]).toUpperCase() : null;
+
+        let value = NaN;
+        if (ones[a] != null) value = ones[a];
+        else if (tens[a] != null && b && ones[b] != null) value = tens[a] + ones[b];
+        else if (tens[a] != null && !b) value = tens[a];
+
+        if (Number.isFinite(value) && value >= 1 && value <= 52) {
+          const cand = { value, start: m.index, end: m.index + m[0].length };
+          if (!best || (cand.end - cand.start) > (best.end - best.start) || cand.start < best.start) best = cand;
         }
       }
       return best;
     }
 
-    function removeSpanPreserveSpacing(orig,start,end){
-      let out=orig.slice(0,start)+orig.slice(end);
-      out=out.replace(/\s{2,}/g," ").replace(/[ \t]+$/,"");
-      return out;
+    // Surgical deletion: preserve number exactly, remove only cut card span
+    function removeSpanPreserveSpacing(original, start, end) {
+      const before = original.slice(0, start);
+      const after = original.slice(end);
+
+      const beforeEndsSpace = /\s$/.test(before);
+      const afterStartsSpace = /^\s/.test(after);
+
+      let joined = before + after;
+      if (beforeEndsSpace && afterStartsSpace) {
+        joined = before.replace(/\s+$/, " ") + after.replace(/^\s+/, "");
+      }
+      return joined.replace(/[ \t]+$/g, "");
     }
 
-    function positionAfterCut(op,bp){
-      const z=(op-bp-1)%52;
-      return (z<0?z+52:z)+1;
+    function positionAfterCut(originalPos, bottomPos) {
+      const z = (originalPos - bottomPos - 1) % 52;
+      return (z < 0 ? z + 52 : z) + 1;
     }
 
-    function compute(){
-      const lines=noteContent.value.split("\n").map(l=>l.trim()).filter(Boolean);
-      if(lines.length<2) return;
+    function compute() {
+      const lines = noteContent.value.split("\n").map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) return;
 
-      const named=findCardInText(lines[0]);
-      if(!named) return;
-      const posInfo=findPositionInLine(lines[1]);
-      if(!posInfo) return;
+      const namedCard = normaliseCardStrict(lines[0]);
+      if (!namedCard) return;
 
-      let cut=null,mode="top",span=null;
-      if(lines[2]){
-        const c=findCardInText(lines[2]); if(!c) return;
-        cut=c.code; mode="bottom";
-      }else{
-        const rem=lines[1].slice(posInfo.end);
-        const c=findCardInText(rem);
-        if(c){ cut=c.code; mode="mid"; span={s:posInfo.end+c.start,e:posInfo.end+c.end}; }
+      const posInfo = findPositionInLine(lines[1]);
+      if (!posInfo) return;
+      const targetPos = posInfo.value;
+
+      const namedIdx = stack.indexOf(namedCard);
+      if (namedIdx < 0) return;
+
+      let cutCard = null;
+      let mode = "top"; // "top" | "mid" | "bottom"
+      let cutSpanAbs = null;
+
+      // Priority 1: line 3
+      if (lines.length >= 3) {
+        const c3 = normaliseCardStrict(lines[2]);
+        if (!c3) return;
+        cutCard = c3;
+        mode = "bottom";
+      } else {
+        // Priority 2: after the number on line 2
+        const remainder = lines[1].slice(posInfo.end);
+        const found = findCardInText(remainder);
+        if (found) {
+          cutCard = found.code;
+          mode = "mid";
+          cutSpanAbs = { start: posInfo.end + found.start, end: posInfo.end + found.end };
+        }
       }
 
-      const op=stack.indexOf(named.code)+1;
-      if(op<1) return;
-      const cur=cut?positionAfterCut(op,stack.indexOf(cut)+1):op;
-      const diff=cur-posInfo.value;
-      if(diff===0){ lastOutCard="00"; lastOutShift="0"; }
-      else{ let s=diff%52; if(s<0)s+=52; lastOutCard=stack[s-1]; lastOutShift=String(s); }
+      let currentPos;
+      if (cutCard) {
+        const bottomIdx = stack.indexOf(cutCard);
+        if (bottomIdx < 0) return;
+        currentPos = positionAfterCut(namedIdx + 1, bottomIdx + 1);
+      } else {
+        currentPos = namedIdx + 1;
+      }
 
-      if(mode==="bottom") noteContent.value=[lines[0],lines[1]].join("\n")+"\n";
-      if(mode==="mid"&&span) noteContent.value=[lines[0],removeSpanPreserveSpacing(lines[1],span.s,span.e)].join("\n")+"\n";
+      const diff = currentPos - targetPos;
+      if (diff === 0) {
+        lastOutCard = "00";
+        lastOutShift = "0";
+      } else {
+        let shift = diff % 52;
+        if (shift < 0) shift += 52;
+        lastOutCard = stack[shift - 1];
+        lastOutShift = String(shift);
+      }
+
+      // Cleanup
+      if (mode === "bottom") {
+        noteContent.value = [lines[0], lines[1]].join("\n") + "\n";
+      } else if (mode === "mid" && cutSpanAbs) {
+        const cleaned = removeSpanPreserveSpacing(lines[1], cutSpanAbs.start, cutSpanAbs.end);
+        noteContent.value = [lines[0], cleaned].join("\n") + "\n";
+      }
 
       setArmedMode(mode);
     }
 
-    const toolbarBtn=document.getElementById("toolbarBtn");
-    const resetBtn=document.getElementById("resetBtn");
-    let holdTimer=null,isHolding=false,startX=0,startY=0;
-    const HOLD_MS=650,MOVE_TOL=10;
+    // Gestures: tap toolbar compute, hold toolbar peek; arrow reset
+    const toolbarBtn = document.getElementById("toolbarBtn");
+    const resetBtn = document.getElementById("resetBtn");
 
-    function clearHold(){ if(holdTimer){clearTimeout(holdTimer);holdTimer=null;} isHolding=false; }
+    let holdTimer = null;
+    let isHolding = false;
+    let startX = 0, startY = 0;
+    const HOLD_MS = 650;
+    const MOVE_TOL = 10;
 
-    function onDown(e){
-      startX=e.clientX; startY=e.clientY;
-      clearHold();
-      holdTimer=setTimeout(()=>{isHolding=true;showPeek();},HOLD_MS);
+    function clearHold() {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      isHolding = false;
     }
-    function onMove(e){
-      if(!holdTimer) return;
-      if(Math.abs(e.clientX-startX)>MOVE_TOL||Math.abs(e.clientY-startY)>MOVE_TOL){
-        clearHold(); hidePeek();
+
+    function onDown(e) {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      isHolding = false;
+      clearHold();
+      holdTimer = setTimeout(() => {
+        isHolding = true;
+        showPeek();
+      }, HOLD_MS);
+    }
+
+    function onMove(e) {
+      if (!holdTimer) return;
+      if (Math.abs(e.clientX - startX) > MOVE_TOL || Math.abs(e.clientY - startY) > MOVE_TOL) {
+        clearHold();
+        hidePeek();
       }
     }
-    function onUp(){
-      const wasHolding=isHolding;
+
+    function onUpOrCancel() {
+      const wasHolding = isHolding;
       clearHold();
-      if(wasHolding){ hidePeek(); clearArmed(); return; }
-      hidePeek(); setTimeout(compute,80);
+
+      if (wasHolding) {
+        hidePeek();
+        clearArmed();
+        return;
+      }
+
+      hidePeek();
+      setTimeout(compute, 80);
     }
 
-    resetBtn.addEventListener("pointerdown",e=>e.stopPropagation());
-    resetBtn.addEventListener("pointerup",e=>e.stopPropagation());
-    resetBtn.addEventListener("click",e=>e.stopPropagation());
-    resetBtn.addEventListener("click",()=>{
-      clearHold(); noteContent.value=""; lastOutCard=null; lastOutShift=null; clearArmed(); hidePeek();
+    resetBtn.addEventListener("pointerdown", e => e.stopPropagation());
+    resetBtn.addEventListener("pointerup", e => e.stopPropagation());
+    resetBtn.addEventListener("click", e => e.stopPropagation());
+
+    resetBtn.addEventListener("click", () => {
+      clearHold();
+      noteContent.value = "";
+      lastOutCard = null;
+      lastOutShift = null;
+      clearArmed();
+      hidePeek();
     });
 
-    toolbarBtn.addEventListener("pointerdown",onDown);
-    toolbarBtn.addEventListener("pointermove",onMove);
-    toolbarBtn.addEventListener("pointerup",onUp);
-    toolbarBtn.addEventListener("pointercancel",onUp);
+    toolbarBtn.addEventListener("pointerdown", onDown);
+    toolbarBtn.addEventListener("pointermove", onMove);
+    toolbarBtn.addEventListener("pointerup", onUpOrCancel);
+    toolbarBtn.addEventListener("pointercancel", onUpOrCancel);
 
-    if("serviceWorker" in navigator){
-      navigator.serviceWorker.register("/Notes/sw.js").catch(()=>{});
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/Notes/sw.js").catch(() => {});
     }
   </script>
 </body>
