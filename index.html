@@ -11,7 +11,7 @@
 
   <style>
     body{
-      font-family:'Segoe UI', Roboto, sans-serif;
+      font-family: 'Segoe UI', Roboto, sans-serif;
       margin:0;
       background:#fff;
       color:#202124;
@@ -38,8 +38,6 @@
       z-index:3;
       padding:8px 10px;
       margin:-8px -10px;
-      -webkit-tap-highlight-color:transparent;
-      touch-action:manipulation;
       user-select:none;
       -webkit-user-select:none;
       -webkit-touch-callout:none;
@@ -92,11 +90,6 @@
     .calc-trigger.armed-mid .vdot.mid{ background:#202124; opacity:1; }
     .calc-trigger.armed-bottom .vdot.bottom{ background:#202124; opacity:1; }
 
-    .calc-trigger.ack .vdot{ opacity:1; }
-    .calc-trigger.ack .vdot.top,
-    .calc-trigger.ack .vdot.mid,
-    .calc-trigger.ack .vdot.bottom{ background:#202124; }
-
     .peek-arrow{
       position:absolute;
       left:24px;
@@ -104,7 +97,7 @@
       transform:translateY(-50%);
       display:none;
       pointer-events:none;
-      font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size:12px;
       font-weight:700;
       line-height:1;
@@ -163,6 +156,7 @@
   <script>
     "use strict";
 
+    // Elements
     const toolbarBtn  = document.getElementById("toolbarBtn");
     const resetBtn    = document.getElementById("resetBtn");
     const syncBtn     = document.getElementById("syncBtn");
@@ -171,8 +165,10 @@
     const peekCard    = document.getElementById("peekCard");
     const peekShift   = document.getElementById("peekShift");
 
+    // Reduce Android selection/callout interference
     toolbarBtn.addEventListener("contextmenu", (e) => e.preventDefault());
 
+    // Mnemonica (1–52)
     const stack = [
       "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
       "QC","8H","6S","5S","9H","KC","2D","JH","3S","8S","6H","10C",
@@ -181,12 +177,13 @@
       "10D","6C","AH","9D"
     ];
 
+    // State
     let lastOutCard = null;
     let lastOutShift = null;
-
     let lastComputedSnapshot = null;
     let isDirty = true;
 
+    // Clear stale output as soon as you type anything
     noteContent.addEventListener("input", () => {
       isDirty = true;
       lastOutCard = null;
@@ -195,35 +192,29 @@
       hidePeek();
     });
 
-    function ackBlink() {
-      syncBtn.classList.add("ack");
-      setTimeout(() => syncBtn.classList.remove("ack"), 110);
-    }
-
-    function clearArmed() {
+    function clearArmed(){
       syncBtn.classList.remove("armed-top","armed-mid","armed-bottom");
     }
-
-    function setArmedMode(mode) {
+    function setArmedMode(mode){
       clearArmed();
       if (mode === "mid") syncBtn.classList.add("armed-mid");
       else if (mode === "bottom") syncBtn.classList.add("armed-bottom");
       else syncBtn.classList.add("armed-top");
     }
 
-    function showPeek() {
+    function showPeek(){
       if (!lastOutCard) return;
       peekCard.textContent = lastOutCard;
       peekShift.textContent = lastOutShift;
       peekArrow.style.display = "block";
     }
-
-    function hidePeek() {
+    function hidePeek(){
       peekArrow.style.display = "none";
       peekCard.textContent = "";
       peekShift.textContent = "";
     }
 
+    // Parsing helpers
     const suitMap = {
       SPADES:"S",SPADE:"S",S:"S","♠":"S",
       HEARTS:"H",HEART:"H",H:"H","♥":"H",
@@ -237,52 +228,52 @@
       FOUR:"4","4":"4",THREE:"3","3":"3",TWO:"2","2":"2"
     };
 
-    function findCardInText(text) {
+    function findCardInText(text){
       if (!text) return null;
       const raw = String(text);
 
+      // Compact: "7D", "10H", "A♠", optional whitespace
       const compactRe = /(10|[2-9AJQK])\s*([CDHS♠♥♦♣])/ig;
       let m;
       while ((m = compactRe.exec(raw)) !== null) {
-        const rank = String(m[1]).toUpperCase();
-        const suitToken = m[2];
-        const suit = ({"♠":"S","♥":"H","♦":"D","♣":"C"}[suitToken] || String(suitToken).toUpperCase());
-        const code = rank + suit;
+        const r = String(m[1]).toUpperCase();
+        const s = ({"♠":"S","♥":"H","♦":"D","♣":"C"}[m[2]] || String(m[2]).toUpperCase());
+        const code = r + s;
         if (/^(10|[2-9AJQK])[CDHS]$/.test(code)) {
           return { code, start: m.index, end: m.index + m[0].length };
         }
       }
 
+      // Wordy tokens: first suit + first rank anywhere
       const tokenRe = /[A-Za-z0-9♠♥♦♣]+/g;
-      const tokens = [];
       let t;
-      while ((t = tokenRe.exec(raw)) !== null) {
-        tokens.push({ upper: t[0].toUpperCase(), start: t.index, end: t.index + t[0].length });
-      }
+      let suitTok = null, rankTok = null;
 
-      let suitTok = null;
-      let rankTok = null;
-      for (const tok of tokens) {
-        if (!suitTok && suitMap[tok.upper]) suitTok = tok;
-        if (!rankTok && rankMap[tok.upper]) rankTok = tok;
+      while ((t = tokenRe.exec(raw)) !== null) {
+        const u = t[0].toUpperCase();
+        const s = t.index;
+        const e = s + t[0].length;
+
+        if (!suitTok && suitMap[u]) suitTok = { u, s, e };
+        if (!rankTok && rankMap[u]) rankTok = { u, s, e };
         if (suitTok && rankTok) break;
       }
+
       if (!suitTok || !rankTok) return null;
 
-      const code = rankMap[rankTok.upper] + suitMap[suitTok.upper];
+      const code = rankMap[rankTok.u] + suitMap[suitTok.u];
       if (!/^(10|[2-9AJQK])[CDHS]$/.test(code)) return null;
 
-      const start = Math.min(suitTok.start, rankTok.start);
-      const end = Math.max(suitTok.end, rankTok.end);
-      return { code, start, end };
+      return { code, start: Math.min(suitTok.s, rankTok.s), end: Math.max(suitTok.e, rankTok.e) };
     }
 
-    function normaliseCardStrict(line) {
-      const found = findCardInText(String(line ?? ""));
-      return found ? found.code : null;
+    function normaliseCard(line){
+      const f = findCardInText(String(line ?? ""));
+      return f ? f.code : null;
     }
 
-    function normaliseNumberTextKeepLength(s) {
+    // Number words (1–52); keep string length stable (no space collapsing)
+    function normaliseNumberTextKeepLength(s){
       return String(s ?? "")
         .replace(/\u00A0/g, " ")
         .replace(/[\u2010\u2011\u2012\u2013\u2014]/g, "-");
@@ -293,89 +284,77 @@
       TEN:10,ELEVEN:11,TWELVE:12,THIRTEEN:13,FOURTEEN:14,FIFTEEN:15,
       SIXTEEN:16,SEVENTEEN:17,EIGHTEEN:18,NINETEEN:19
     };
-    const tens = { TWENTY:20,THIRTY:30,FORTY:40,FIFTY:50 };
+    const tens = { TWENTY:20, THIRTY:30, FORTY:40, FIFTY:50 };
 
-    function findPositionInLine(line) {
+    function findPositionInLine(line){
       const s = normaliseNumberTextKeepLength(String(line ?? ""));
       if (!s.trim()) return null;
 
       const d = /\d+/.exec(s);
       if (d) {
-        const value = parseInt(d[0], 10);
-        if (value >= 1 && value <= 52) return { value, start: d.index, end: d.index + d[0].length };
+        const v = parseInt(d[0], 10);
+        if (v >= 1 && v <= 52) return { value: v, start: d.index, end: d.index + d[0].length };
       }
 
-      const wordRe = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)(?:[-\s]+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))?\b/ig;
+      const re = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)(?:[-\s]+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))?\b/ig;
 
-      let best = null;
-      let m;
-      while ((m = wordRe.exec(s)) !== null) {
+      let best = null, m;
+      while ((m = re.exec(s)) !== null) {
         const a = String(m[1]).toUpperCase();
         const b = m[2] ? String(m[2]).toUpperCase() : null;
 
-        let value = NaN;
-        if (ones[a] != null) value = ones[a];
-        else if (tens[a] != null && b && ones[b] != null) value = tens[a] + ones[b];
-        else if (tens[a] != null && !b) value = tens[a];
+        let v = NaN;
+        if (ones[a] != null) v = ones[a];
+        else if (tens[a] != null && b && ones[b] != null) v = tens[a] + ones[b];
+        else if (tens[a] != null && !b) v = tens[a];
 
-        if (Number.isFinite(value) && value >= 1 && value <= 52) {
-          const cand = { value, start: m.index, end: m.index + m[0].length };
-          if (!best || (cand.end - cand.start) > (best.end - best.start) || cand.start < best.start) best = cand;
+        if (Number.isFinite(v) && v >= 1 && v <= 52) {
+          const cand = { value: v, start: m.index, end: m.index + m[0].length };
+          if (!best || (cand.end - cand.start) > (best.end - best.start)) best = cand;
         }
       }
       return best;
     }
 
-    function removeSpanPreserveSpacingPolished(original, start, end) {
-      let before = original.slice(0, start);
-      let after  = original.slice(end);
-
-      before = before.replace(/\b(of|the)\b[\s\-]*$/i, "");
-      after  = after.replace(/^[\s\-]*\b(of|the)\b/i, "");
-
-      const beforeEndsSpace = /\s$/.test(before);
-      const afterStartsSpace = /^\s/.test(after);
-
-      let joined = before + after;
-      if (beforeEndsSpace && afterStartsSpace) {
-        joined = before.replace(/\s+$/, " ") + after.replace(/^\s+/, "");
-      }
-
-      joined = joined.replace(/\s{2,}/g, " ");
-      return joined.replace(/[ \t]+$/g, "");
+    function removeSpanPolished(orig, start, end){
+      let before = orig.slice(0, start).replace(/\b(of|the)\b[\s\-]*$/i, "");
+      let after  = orig.slice(end).replace(/^[\s\-]*\b(of|the)\b/i, "");
+      let joined = (before + after).replace(/\s{2,}/g, " ").replace(/[ \t]+$/g, "");
+      return joined;
     }
 
-    function positionAfterCut(originalPos, bottomPos) {
+    function positionAfterCut(originalPos, bottomPos){
       const z = (originalPos - bottomPos - 1) % 52;
       return (z < 0 ? z + 52 : z) + 1;
     }
 
-    function compute() {
-      if (!isDirty && lastComputedSnapshot === noteContent.value) { ackBlink(); return; }
+    function compute(){
+      // Don’t recompute unless the user has edited
+      if (!isDirty && lastComputedSnapshot === noteContent.value) return;
 
       const raw = noteContent.value.split("\n");
       const line1 = raw[0] ?? "";
       const line2 = raw[1] ?? "";
       const line3 = raw[2] ?? "";
 
-      if (!line1.trim() || !line2.trim()) { ackBlink(); return; }
+      if (!line1.trim() || !line2.trim()) return;
 
-      const namedCard = normaliseCardStrict(line1);
-      if (!namedCard) { ackBlink(); return; }
+      const namedCard = normaliseCard(line1);
+      if (!namedCard) return;
 
       const posInfo = findPositionInLine(line2);
-      if (!posInfo) { ackBlink(); return; }
+      if (!posInfo) return;
 
       const namedIdx = stack.indexOf(namedCard);
-      if (namedIdx < 0) { ackBlink(); return; }
+      if (namedIdx < 0) return;
 
       let cutCard = null;
-      let mode = "top";
-      let cutSpanAbs = null;
+      let mode = "top"; // top (no cut), mid (inline cut), bottom (line3 cut)
+      let inlineSpan = null;
 
       if (line3.trim()) {
-        const c3 = normaliseCardStrict(line3);
-        if (!c3) { ackBlink(); return; }
+        const c3 = normaliseCard(line3);
+        if (!c3) return;
         cutCard = c3;
         mode = "bottom";
       } else {
@@ -384,22 +363,20 @@
         if (found) {
           cutCard = found.code;
           mode = "mid";
-          cutSpanAbs = { start: posInfo.end + found.start, end: posInfo.end + found.end };
+          inlineSpan = { s: posInfo.end + found.start, e: posInfo.end + found.end };
         }
       }
 
       let currentPos;
       if (cutCard) {
         const bottomIdx = stack.indexOf(cutCard);
-        if (bottomIdx < 0) { ackBlink(); return; }
+        if (bottomIdx < 0) return;
         currentPos = positionAfterCut(namedIdx + 1, bottomIdx + 1);
       } else {
         currentPos = namedIdx + 1;
       }
 
-      const targetPos = posInfo.value;
-      const diff = currentPos - targetPos;
-
+      const diff = currentPos - posInfo.value;
       if (diff === 0) {
         lastOutCard = "00";
         lastOutShift = "0";
@@ -410,91 +387,82 @@
         lastOutShift = String(shift);
       }
 
+      // Clean up cut input only (preserve how they typed line1/line2 otherwise)
       if (mode === "bottom") {
         noteContent.value = line1 + "\n" + line2;
-      } else if (mode === "mid" && cutSpanAbs) {
-        const cleanedLine2 = removeSpanPreserveSpacingPolished(line2, cutSpanAbs.start, cutSpanAbs.end);
-        noteContent.value = line1 + "\n" + cleanedLine2;
+      } else if (mode === "mid" && inlineSpan) {
+        noteContent.value = line1 + "\n" + removeSpanPolished(line2, inlineSpan.s, inlineSpan.e);
       }
 
       setArmedMode(mode);
-
       lastComputedSnapshot = noteContent.value;
       isDirty = false;
     }
 
-    // Gestures: tap toolbar compute, hold toolbar peek; arrow reset
-    let holdTimer = null;
-    let isHolding = false;
-    let peekShownThisGesture = false;   // <-- micro-hardening flag
-    let startX = 0, startY = 0;
+    // Gestures: tap toolbar runs, hold shows peek (peek-only), arrow resets
     const HOLD_MS = 650;
     const MOVE_TOL = 10;
 
-    function clearHold() {
+    let holdTimer = null;
+    let peekShownThisGesture = false;
+    let startX = 0, startY = 0;
+    let startedOnReset = false;
+
+    function clearHold(){
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-      isHolding = false;
     }
 
-    function onDown(e) {
-      if (e.target && e.target.closest && e.target.closest("#resetBtn")) return;
+    function onDown(e){
+      startedOnReset = !!(e.target && e.target.closest && e.target.closest("#resetBtn"));
+      if (startedOnReset) return;
 
-      // Drop IME early for stability
+      // IME stability: blur early
       if (document.activeElement === noteContent) noteContent.blur();
 
-      if (e.pointerType === "mouse" && e.button !== 0) return;
-
+      peekShownThisGesture = false;
       startX = e.clientX;
       startY = e.clientY;
-      isHolding = false;
-      peekShownThisGesture = false;
-      clearHold();
 
       try { toolbarBtn.setPointerCapture(e.pointerId); } catch (_) {}
 
+      clearHold();
       holdTimer = setTimeout(() => {
-        isHolding = true;
-        peekShownThisGesture = true;   // <-- once true, gesture is "peek-only"
+        peekShownThisGesture = true;
         showPeek();
       }, HOLD_MS);
     }
 
-    function onMove(e) {
-      if (e.target && e.target.closest && e.target.closest("#resetBtn")) return;
-      if (!holdTimer) return;
-
+    function onMove(e){
+      if (startedOnReset || !holdTimer) return;
       if (Math.abs(e.clientX - startX) > MOVE_TOL || Math.abs(e.clientY - startY) > MOVE_TOL) {
         clearHold();
         hidePeek();
-        // IMPORTANT: do NOT clear peekShownThisGesture
-        // If the peek already appeared, we still treat the gesture as peek-only.
+        // NOTE: do not clear peekShownThisGesture – if peek was shown, gesture stays peek-only
       }
     }
 
-    function onUpOrCancel(e) {
-      if (e && e.target && e.target.closest && e.target.closest("#resetBtn")) return;
+    function onUpOrCancel(){
+      if (startedOnReset) { startedOnReset = false; return; }
 
-      const wasHolding = isHolding;
       clearHold();
 
-      // Micro-hardening: if peek was ever shown, never compute on release
-      if (peekShownThisGesture || wasHolding) {
+      if (peekShownThisGesture) {
         hidePeek();
         clearArmed();
         return;
       }
 
       hidePeek();
-      setTimeout(compute, 60);
+      setTimeout(compute, 50);
     }
 
     resetBtn.addEventListener("click", () => {
       clearHold();
+      startedOnReset = false;
       peekShownThisGesture = false;
 
       noteContent.blur();
       noteContent.value = "";
-      noteContent.dispatchEvent(new Event("input", { bubbles: true }));
 
       lastOutCard = null;
       lastOutShift = null;
