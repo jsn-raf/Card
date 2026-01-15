@@ -166,6 +166,7 @@
 
     toolbarBtn.addEventListener("contextmenu", (e) => e.preventDefault());
 
+    // Mnemonica base order (1–52)
     const stack = [
       "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
       "QC","8H","6S","5S","9H","KC","2D","JH","3S","8S","6H","10C",
@@ -209,6 +210,7 @@
       peekShift.textContent = "";
     }
 
+    // Parsing
     const suitMap = {
       SPADES:"S",SPADE:"S",S:"S","♠":"S",
       HEARTS:"H",HEART:"H",H:"H","♥":"H",
@@ -306,9 +308,18 @@
       return (before + after).replace(/\s{2,}/g, " ").replace(/[ \t]+$/g, "");
     }
 
-    function positionAfterCut(originalPos, bottomPos){
-      const z = (originalPos - bottomPos - 1) % 52;
-      return (z < 0 ? z + 52 : z) + 1;
+    // Build the current deck order given the bottom card.
+    // Semantics: line 3 (or inline card on line 2) = BOTTOM CARD of the deck right now.
+    // This is just a rotation of the same cycle (Mnemonica preserved).
+    function buildDeckNow(bottomCard){
+      if (!bottomCard) return stack.slice();
+
+      const bi = stack.indexOf(bottomCard);
+      if (bi < 0) return null;
+
+      // bottomCard must be last in deckNow
+      // deckNow = card after bottom ... up to bottom
+      return stack.slice(bi + 1).concat(stack.slice(0, bi + 1));
     }
 
     function compute(){
@@ -327,39 +338,35 @@
       const posInfo = findPositionInLine(line2);
       if (!posInfo) return;
 
-      const namedIdx = stack.indexOf(namedCard);
-      if (namedIdx < 0) return;
-
-      let cutCard = null;
+      // Determine bottom card (optional)
+      let bottomCard = null;
       let mode = "top";
       let inlineSpan = null;
 
       if (line3.trim()) {
-        const c3 = normaliseCard(line3);
-        if (!c3) return;
-        cutCard = c3;
+        const b3 = normaliseCard(line3);
+        if (!b3) return;
+        bottomCard = b3;
         mode = "bottom";
       } else {
         const remainder = line2.slice(posInfo.end);
         const found = findCardInText(remainder);
         if (found) {
-          cutCard = found.code;
+          bottomCard = found.code;
           mode = "mid";
           inlineSpan = { s: posInfo.end + found.start, e: posInfo.end + found.end };
         }
       }
 
-      let currentPos;
-      if (cutCard) {
-        const bottomIdx = stack.indexOf(cutCard);
-        if (bottomIdx < 0) return;
-        currentPos = positionAfterCut(namedIdx + 1, bottomIdx + 1);
-      } else {
-        currentPos = namedIdx + 1;
-      }
+      const deckNow = buildDeckNow(bottomCard);
+      if (!deckNow) return;
 
-      // OPTION B (inclusive dealing):
-      // They say "N" and you DEAL the Nth card, so we compare to (N+1) in cut-position terms.
+      const namedIdxNow = deckNow.indexOf(namedCard);
+      if (namedIdxNow < 0) return;
+
+      const currentPos = namedIdxNow + 1;
+
+      // OPTION B (inclusive dealing): you deal the Nth card, so compare to N+1
       const effectiveTarget = posInfo.value + 1;
       const diff = currentPos - effectiveTarget;
 
@@ -369,10 +376,12 @@
       } else {
         let shift = diff % 52;
         if (shift < 0) shift += 52;
-        lastOutCard = stack[shift - 1];
+        // IMPORTANT: output card must also be in deckNow coordinates (since you're dealing through deckNow)
+        lastOutCard = deckNow[shift - 1];
         lastOutShift = String(shift);
       }
 
+      // Clean up the bottom-card entry only (preserve how they typed number etc.)
       if (mode === "bottom") {
         noteContent.value = line1 + "\n" + line2;
       } else if (mode === "mid" && inlineSpan) {
@@ -384,6 +393,7 @@
       isDirty = false;
     }
 
+    // Gestures: tap toolbar runs, hold shows peek, arrow resets
     const HOLD_MS = 650;
     const MOVE_TOL = 10;
 
