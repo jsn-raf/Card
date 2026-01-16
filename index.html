@@ -33,7 +33,7 @@
       -webkit-touch-callout:none;
     }
 
-    /* 1) Stronger anti-selection: everything in the toolbar & about card */
+    /* Stronger anti-selection for everything in the toolbar */
     .toolbar *{
       user-select:none !important;
       -webkit-user-select:none !important;
@@ -130,7 +130,7 @@
       -webkit-overflow-scrolling:touch;
     }
 
-    /* 2) Modal-open pointer-event hardening (underlay disabled) */
+    /* Modal-open pointer-event hardening (underlay disabled) */
     body.modal-open .toolbar,
     body.modal-open .note-area{
       pointer-events:none;
@@ -154,28 +154,33 @@
       background:#fff;
       border-radius:10px;
       padding:16px 16px 14px;
-      /* 3) Flatter card: softer shadow */
       box-shadow:0 6px 18px rgba(0,0,0,0.10);
       text-align:left;
+      cursor:pointer; /* tap-to-dismiss affordance */
     }
+
+    /* IMPORTANT: Disable selection across the entire about card */
     .about-card, .about-card *{
       user-select:none !important;
       -webkit-user-select:none !important;
       -webkit-touch-callout:none !important;
+      -webkit-tap-highlight-color:transparent !important;
+      -webkit-user-drag:none !important;
     }
 
     .about-title{
-      /* 3) Slightly flatter hierarchy */
       font-size:14.5px;
       font-weight:500;
       margin:0 0 10px 0;
       color:#202124;
+      pointer-events:none; /* so taps anywhere close */
     }
 
     .about-body{
       font-size:13.5px;
       line-height:1.45;
       color:#202124;
+      pointer-events:none; /* so taps anywhere close */
     }
 
     .about-body p{ margin:0 0 10px 0; }
@@ -185,6 +190,7 @@
       font-size:12px;
       line-height:1.35;
       color:#6b7077;
+      pointer-events:none; /* so taps anywhere close */
     }
   </style>
 </head>
@@ -215,7 +221,7 @@
 
   <!-- About popup -->
   <div class="about-overlay" id="aboutOverlay" aria-hidden="true">
-    <div class="about-card">
+    <div class="about-card" id="aboutCard" role="button" aria-label="Close">
       <div class="about-title">Quick Notes</div>
       <div class="about-body">
         <p>
@@ -243,6 +249,7 @@
     const resetBtn     = document.getElementById("resetBtn");
     const aboutBtn     = document.getElementById("aboutBtn");
     const aboutOverlay = document.getElementById("aboutOverlay");
+    const aboutCard    = document.getElementById("aboutCard");
 
     const noteContent  = document.getElementById("noteContent");
     const peekArrow    = document.getElementById("peekArrow");
@@ -250,6 +257,8 @@
     const peekShift    = document.getElementById("peekShift");
 
     toolbarBtn.addEventListener("contextmenu", e => e.preventDefault());
+    aboutOverlay.addEventListener("contextmenu", e => e.preventDefault());
+    aboutCard.addEventListener("contextmenu", e => e.preventDefault());
 
     const stack = [
       "4C","2H","7D","3C","4H","6D","AS","5H","9S","2S","QH","3D",
@@ -583,8 +592,15 @@
       else openAbout();
     });
 
+    // NEW: tap anywhere (overlay OR card) closes
     aboutOverlay.addEventListener("click", (e) => {
-      if (e.target === aboutOverlay) closeAbout();
+      e.preventDefault();
+      closeAbout();
+    });
+    aboutCard.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAbout();
     });
 
     /* Service worker */
